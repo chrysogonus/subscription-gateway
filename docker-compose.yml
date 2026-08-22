@@ -1,8 +1,13 @@
 services:
   gateway:
-    build: .
+    build:
+      context: .
+      args:
+        CODEX_VERSION: ${CODEX_VERSION:-0.149.0}
+        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.226}
+        GATEWAY_UID: ${GATEWAY_UID:-1000}
     environment:
-      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY for Docker use}
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:-local}
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_ALLOW_REMOTE: "true"
       GATEWAY_SQLITE_PATH: /data/gateway.db
@@ -10,9 +15,14 @@ services:
       - "127.0.0.1:11435:11435"
     volumes:
       - gateway-data:/data
-      # Provider clients and auth are intentionally not copied into the image.
-      # Add explicit read/write mounts only after installing official clients
-      # in a private derivative image; see README.md.
+      - ${HOST_CODEX_HOME:-${HOME}/.codex}:/home/gateway/.codex:rw
+      - ${HOST_CLAUDE_HOME:-${HOME}/.claude}:/home/gateway/.claude:rw
+      - ${HOST_CLAUDE_CONFIG:-${HOME}/.claude.json}:/home/gateway/.claude.json:rw
+      - ${GATEWAY_WORKSPACE:-${HOME}/workspace}:/home/gateway/workspace:rw
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 volumes:

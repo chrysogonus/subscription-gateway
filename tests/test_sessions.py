@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from subscription_gateway.errors import GatewayError
 from subscription_gateway.sessions.manager import SessionManager
 from subscription_gateway.sessions.storage import SQLiteSessionStorage
 
@@ -36,7 +37,7 @@ async def test_missing_session_raises_normalized_error(tmp_path: Path) -> None:
     storage = SQLiteSessionStorage(tmp_path / "sessions.db")
     await storage.initialize()
     manager = SessionManager(storage)
-    with pytest.raises(Exception) as caught:
+    with pytest.raises(GatewayError) as caught:
         await manager.require("missing")
     await storage.close()
     assert caught.value.code == "session_not_found"

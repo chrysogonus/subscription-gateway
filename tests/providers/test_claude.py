@@ -51,6 +51,7 @@ def test_claude_command_disables_tools_for_chat() -> None:
     )
     assert command[0] == "/bin/echo"
     assert command[-1] == "hello && touch /tmp/nope"
+    assert "--safe-mode" in command
     assert command[command.index("--tools") + 1] == ""
     assert "--print" in command
 

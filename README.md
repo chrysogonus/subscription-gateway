@@ -280,21 +280,88 @@ Configured aliases are not automatic guarantees of account-level model access. I
 version or plan does not offer an alias's `provider_model`, the gateway returns
 `model_not_available`. Add more aliases under the provider's `models` mapping.
 
-## Docker (secondary)
+## Docker
 
-Native localhost execution is the supported default. The gateway depends on authenticated local
-clients, which are usually absent from a container. The image does not install clients and never
-copies credentials.
+The supplied image installs the pinned, tested official Codex and Claude Code clients. Provider
+credentials are never copied into an image: Compose mounts the host's existing client state only
+at runtime. The HTTP port remains published on `127.0.0.1`, and the container runs as a non-root
+user with all Linux capabilities dropped.
+
+First authenticate the official clients on the host and confirm both statuses:
 
 ```bash
-export GATEWAY_API_KEY=choose-a-local-secret
-docker compose up --build
+codex login status
+claude auth status
 ```
 
-To make a provider usable in Docker, build a private derivative image containing its official
-client and explicitly mount only the provider configuration/session directory at runtime. Never
-bake those directories into an image or publish such an image. Host-installed executables may
-also depend on host libraries and are not safely portable as a single bind-mounted file.
+Then start the gateway:
+
+```bash
+export GATEWAY_UID="$(id -u)"       # Linux; usually 1000
+export GATEWAY_API_KEY=local        # Change this if desired
+docker compose up --build --detach
+
+docker compose ps
+docker compose exec gateway subscription-gateway status
+```
+
+The first image build installs Codex and Claude Code and can take several minutes. Subsequent
+starts use the cached image:
+
+```bash
+docker compose up --detach
+```
+
+Test it from the host:
+
+```bash
+curl http://127.0.0.1:11435/v1/models \
+  -H 'Authorization: Bearer local'
+```
+
+Compose defaults are:
+
+- API key: `local`;
+- Codex state: `$HOME/.codex` mounted at `/home/gateway/.codex`;
+- Claude state: `$HOME/.claude` mounted at `/home/gateway/.claude`;
+- Claude user state: `$HOME/.claude.json` mounted at `/home/gateway/.claude.json`;
+- agent workspace: `$HOME/workspace` mounted at `/home/gateway/workspace`;
+- SQLite metadata: the Docker-managed `gateway-data` volume.
+
+Override host paths or pinned CLI releases through the variables shown in
+`.env.docker.example`. Compose automatically reads a file named `.env`, so one option is:
+
+```bash
+cp .env.docker.example .env
+# Edit .env for this machine, then:
+docker compose up --build --detach
+```
+
+The provider-state mounts are read-write because the official clients refresh their own sessions
+and persist conversation metadata. The gateway still never opens or parses credential files. The
+adapters use Codex's `--ignore-user-config` and Claude's `--safe-mode`, so host hooks, plugins, and
+MCP configuration are not activated by gateway requests.
+
+Codex can store authentication in an OS keyring instead of `$HOME/.codex/auth.json`. A container
+cannot access the host keyring. If `docker compose exec gateway codex login status` is not ready,
+configure Codex's supported file credential store on the host and run `codex login` there again.
+Claude similarly needs its official local client state under the mounted Claude directory and
+`.claude.json` file. Do not copy either credential into the repository or Dockerfile.
+
+For agent requests, use the container path—not the host path:
+
+```json
+{
+  "cwd": "/home/gateway/workspace/my-project",
+  "permissions": "workspace-write"
+}
+```
+
+Stop the service without deleting its SQLite volume:
+
+```bash
+docker compose down
+```
 
 ## Platform support
 

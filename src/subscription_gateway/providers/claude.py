@@ -98,6 +98,7 @@ class ClaudeProvider(Provider):
             "--print",
             "--output-format",
             "json",
+            "--safe-mode",
             "--model",
             model,
         ]

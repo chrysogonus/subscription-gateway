@@ -60,8 +60,10 @@ def test_codex_command_is_argument_array_and_resume_aware() -> None:
     )
     assert initial[0] == "/bin/echo"
     assert initial[-1] == "user data; $(whoami)"
+    assert "--ignore-user-config" in initial
     assert initial[initial.index("--sandbox") + 1] == "read-only"
     assert resumed[1:3] == ["exec", "resume"]
+    assert "--ignore-user-config" in resumed
     assert "thread-123" in resumed
 
 
