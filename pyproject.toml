@@ -8,8 +8,32 @@ version = "0.1.0"
 description = "Local OpenAI-compatible gateway for authenticated Codex and Claude Code clients"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
-authors = [{ name = "Subscription LLM Gateway contributors" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Christopher Filsinger", email = "christopher.filsinger@googlemail.com" },
+]
+keywords = [
+  "openai-compatible",
+  "llm",
+  "gateway",
+  "codex",
+  "claude-code",
+  "fastapi",
+  "openwebui",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Web Environment",
+  "Framework :: FastAPI",
+  "Intended Audience :: Developers",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Typing :: Typed",
+]
 dependencies = [
   "fastapi>=0.115,<1",
   "pydantic>=2.10,<3",
@@ -23,12 +47,19 @@ dev = [
   "mypy>=1.14,<2",
   "pytest>=8.3,<10",
   "pytest-asyncio>=0.25,<2",
+  "pytest-cov>=6.0,<8",
   "ruff>=0.9,<1",
   "types-PyYAML>=6.0,<7",
 ]
 
 [project.scripts]
 subscription-gateway = "subscription_gateway.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/chrysogonus/sub2api"
+Repository = "https://github.com/chrysogonus/sub2api"
+Issues = "https://github.com/chrysogonus/sub2api/issues"
+Changelog = "https://github.com/chrysogonus/sub2api/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/subscription_gateway"]
@@ -49,3 +80,16 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 python_version = "3.12"
 strict = true
 packages = ["subscription_gateway"]
+
+[tool.coverage.run]
+source = ["src/subscription_gateway"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "\\.\\.\\.",
+]
