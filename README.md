@@ -205,6 +205,11 @@ is stored in the `open-webui-data` Docker volume. The pinned slim image avoids b
 local embedding model; ordinary chat works normally, while knowledge/RAG features may download
 their selected embedding model during the first startup.
 
+OpenWebUI is configured with legacy function calling because Codex and Claude Code are agent
+runtimes, not OpenAI tool-calling endpoints. In this mode OpenWebUI performs its compatible
+prompt-based tool orchestration and sends ordinary message requests to the gateway. Native
+OpenAI `tools` payloads remain rejected by the gateway instead of being silently ignored.
+
 For a separately installed OpenWebUI instance, add an OpenAI-compatible connection:
 
 - URL: `http://127.0.0.1:11435/v1` when OpenWebUI runs natively;

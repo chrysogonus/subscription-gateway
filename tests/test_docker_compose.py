@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import yaml
@@ -13,6 +14,9 @@ def test_open_webui_is_wired_to_gateway() -> None:
 
     assert webui["environment"]["OPENAI_API_BASE_URL"] == "http://gateway:11435/v1"
     assert webui["environment"]["ENABLE_OLLAMA_API"] == "false"
+    assert json.loads(webui["environment"]["DEFAULT_MODEL_PARAMS"]) == {
+        "function_calling": "legacy"
+    }
     assert webui["depends_on"]["gateway"]["condition"] == "service_healthy"
     assert webui["ports"] == ["127.0.0.1:${OPEN_WEBUI_PORT:-3001}:8080"]
     assert "open-webui-data:/app/backend/data" in webui["volumes"]
