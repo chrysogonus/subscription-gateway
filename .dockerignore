@@ -1,6 +1,10 @@
 .git
+.github
 .gitignore
+.editorconfig
+.pre-commit-config.yaml
 .venv
+.venv*
 .env
 .env.*
 !.env.example
@@ -9,7 +13,17 @@ __pycache__
 .mypy_cache
 .pytest_cache
 .ruff_cache
+build
 dist
+htmlcov
+.coverage
+coverage.xml
+docs
+tests
+*.md
+# The Dockerfile COPYs README.md, because pyproject.toml declares it as the
+# project readme and the build fails without it.
+!README.md
 *.db
 *.db-shm
 *.db-wal

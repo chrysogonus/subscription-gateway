@@ -6,6 +6,7 @@ services:
         CODEX_VERSION: ${CODEX_VERSION:-0.149.0}
         CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.226}
         GATEWAY_UID: ${GATEWAY_UID:-1000}
+        APP_VERSION: ${APP_VERSION:-dev}
     environment:
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:-local}
       GATEWAY_HOST: 0.0.0.0

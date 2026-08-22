@@ -1,4 +1,6 @@
 .venv/
+.venv*/
+build/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -7,7 +9,11 @@ dist/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.xml
 htmlcov/
+.vscode/
+.idea/
+.DS_Store
 .env
 config.yaml
 gateway.db

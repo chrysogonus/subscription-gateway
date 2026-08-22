@@ -48,9 +48,9 @@ PROFILE := --profile webui
 endif
 ALL_PROFILES := --profile webui
 
-.PHONY: help install dev lock test lint format fix typecheck check serve status doctor \
-        config env dist clean docker-build up up-webui down restart logs ps shell \
-        docker-status docker-doctor smoke purge
+.PHONY: help install dev lock precommit test lint format fix typecheck check coverage \
+        serve status doctor config env dist clean docker-build up up-webui down restart \
+        logs ps shell docker-status docker-doctor smoke purge
 
 ##@ General
 
@@ -84,6 +84,10 @@ endif
 lock: ## Refresh uv.lock
 	uv lock
 
+precommit: ## Install the pre-commit hooks
+	$(RUN) $(BIN)pre-commit install || \
+		echo "pre-commit is not installed; run: pipx install pre-commit"
+
 config: ## Create config.yaml from the example
 	@if [ -e $(CONFIG) ]; then echo "$(CONFIG) already exists; leaving it alone."; \
 	else cp config.example.yaml $(CONFIG) && echo "Created $(CONFIG)."; fi
@@ -97,8 +101,9 @@ env: ## Create .env for Docker from the example
 test: ## Run the test suite
 	$(RUN) $(BIN)pytest
 
-lint: ## Check style with ruff
+lint: ## Check style and formatting with ruff
 	$(RUN) $(BIN)ruff check .
+	$(RUN) $(BIN)ruff format --check .
 
 format: ## Format the code with ruff
 	$(RUN) $(BIN)ruff format .
@@ -109,6 +114,9 @@ fix: ## Apply ruff autofixes and formatting
 
 typecheck: ## Type-check with mypy
 	$(RUN) $(BIN)mypy src/subscription_gateway
+
+coverage: ## Run the test suite with a coverage report
+	$(RUN) $(BIN)pytest --cov --cov-report=term-missing
 
 check: lint typecheck test ## Run lint, typecheck, and tests
 

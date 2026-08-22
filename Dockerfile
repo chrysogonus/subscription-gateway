@@ -14,6 +14,14 @@ RUN npm install --global \
 FROM python:3.12-slim
 
 ARG GATEWAY_UID=1000
+ARG APP_VERSION=dev
+
+LABEL org.opencontainers.image.title="Subscription LLM Gateway" \
+      org.opencontainers.image.description="Local OpenAI-compatible gateway for authenticated Codex and Claude Code clients" \
+      org.opencontainers.image.source="https://github.com/chrysogonus/sub2api" \
+      org.opencontainers.image.documentation="https://github.com/chrysogonus/sub2api#readme" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${APP_VERSION}"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -26,6 +34,8 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY --from=provider-clients /usr/local/bin/node /usr/local/bin/node
 COPY --from=provider-clients /usr/local/lib/node_modules /usr/local/lib/node_modules
+# The claude symlink target really is claude.exe: that is the launcher the
+# claude-code package declares in its own `bin` field, on every platform.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         bash \
