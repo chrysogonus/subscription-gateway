@@ -1,0 +1,81 @@
+name: Bug report
+description: Something in the gateway behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Redact API keys, session identifiers, file paths, and prompt
+        content you would not want to be public** before pasting anything below.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what did you get instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >
+        The request you sent and the response you got. A `curl` command and the response body,
+        including the `X-Gateway-Provider` and `X-Gateway-Model` headers, is ideal.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: subscription-gateway doctor
+      description: Output of `subscription-gateway doctor` (or `make docker-doctor` for Docker).
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Gateway version
+      description: Output of `subscription-gateway --version`, or the commit you are on.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How are you running it?
+      options:
+        - Natively (subscription-gateway serve)
+        - Docker Compose (gateway only)
+        - Docker Compose (gateway + OpenWebUI)
+    validations:
+      required: true
+
+  - type: input
+    id: provider-versions
+    attributes:
+      label: Provider CLI versions
+      description: Output of `codex --version` and `claude --version`, where relevant.
+    validations:
+      required: false
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: e.g. Ubuntu 24.04, macOS 15.3, Windows 11 + WSL2.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Gateway logs around the failure. Run with `GATEWAY_LOG_LEVEL=DEBUG` if useful.
+      render: shell
+    validations:
+      required: false
