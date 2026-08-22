@@ -1,0 +1,44 @@
+server:
+  host: 127.0.0.1
+  port: 11435
+  # api_key: local-secret
+  allow_remote: false
+
+providers:
+  codex:
+    enabled: true
+    command: codex
+    max_concurrent: 2
+    timeout_seconds: 300
+    models:
+      codex/gpt-5.6-sol:
+        provider_model: gpt-5.6-sol
+
+  claude:
+    enabled: true
+    command: claude
+    max_concurrent: 1
+    timeout_seconds: 300
+    models:
+      claude-code/opus-5:
+        provider_model: opus
+
+routing:
+  fallback: true
+  order:
+    - codex
+    - claude
+
+agent:
+  allowed_directories:
+    - ~/workspace
+  allow_outside_directories: false
+  allow_write_fallback: false
+
+storage:
+  sqlite_path: ~/.local/share/subscription-llm-gateway/gateway.db
+
+logging:
+  level: INFO
+  json: false
+  debug_prompts: false

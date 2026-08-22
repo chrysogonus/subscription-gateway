@@ -1,0 +1,19 @@
+services:
+  gateway:
+    build: .
+    environment:
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?Set GATEWAY_API_KEY for Docker use}
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_ALLOW_REMOTE: "true"
+      GATEWAY_SQLITE_PATH: /data/gateway.db
+    ports:
+      - "127.0.0.1:11435:11435"
+    volumes:
+      - gateway-data:/data
+      # Provider clients and auth are intentionally not copied into the image.
+      # Add explicit read/write mounts only after installing official clients
+      # in a private derivative image; see README.md.
+    restart: unless-stopped
+
+volumes:
+  gateway-data:

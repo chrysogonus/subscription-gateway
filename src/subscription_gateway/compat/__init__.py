@@ -1,0 +1,1 @@
+"""OpenAI wire-compatibility helpers."""
