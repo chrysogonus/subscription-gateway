@@ -14,6 +14,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from subscription_gateway import __version__
 from subscription_gateway.api import agents, chat, health, models, responses
 from subscription_gateway.config import GatewayConfig, load_config, secret_value
 from subscription_gateway.errors import GatewayError
@@ -55,7 +56,7 @@ def create_app(
 
     application = FastAPI(
         title="Subscription LLM Gateway",
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
     )
     application.state.config = gateway_config
