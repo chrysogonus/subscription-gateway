@@ -57,13 +57,18 @@ class Provider(ABC):
     display_name: str
     capabilities: ProviderCapabilities
 
-    def __init__(self, models: dict[str, str]) -> None:
+    def __init__(self, models: dict[str, str], default_alias: str | None = None) -> None:
         self.models = models
+        # An alias that is not in this catalog degrades to the first entry rather
+        # than failing later in default_model(); `None in models` is False.
+        self.default_alias = default_alias if default_alias in models else None
 
     def provider_model(self, public_model: str) -> str | None:
         return self.models.get(public_model)
 
     def default_model(self) -> tuple[str, str] | None:
+        if self.default_alias is not None:
+            return self.default_alias, self.models[self.default_alias]
         return next(iter(self.models.items()), None)
 
     @abstractmethod

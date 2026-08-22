@@ -5,6 +5,9 @@ server:
   allow_remote: false
 
 providers:
+  # Listed models appear in /v1/models and in client model pickers. Any other
+  # model the CLI accepts still works without being listed here, by requesting
+  # codex/<model> or claude-code/<model>.
   codex:
     enabled: true
     command: codex
@@ -13,6 +16,10 @@ providers:
     models:
       codex/gpt-5.6-sol:
         provider_model: gpt-5.6-sol
+        default: true          # subscription/auto uses this model for Codex
+      # Add any other model your plan offers so it shows up in pickers:
+      # codex/gpt-5.6-codex:
+      #   provider_model: gpt-5.6-codex
 
   claude:
     enabled: true
@@ -20,8 +27,19 @@ providers:
     max_concurrent: 1
     timeout_seconds: 300
     models:
-      claude-code/opus-5:
+      # Tier aliases always resolve to the latest model of that tier.
+      claude-code/opus:
         provider_model: opus
+        default: true          # subscription/auto uses this model for Claude
+      claude-code/sonnet:
+        provider_model: sonnet
+      claude-code/haiku:
+        provider_model: haiku
+      claude-code/fable:
+        provider_model: fable
+      # Pin an exact version instead:
+      # claude-code/claude-fable-5:
+      #   provider_model: claude-fable-5
 
 routing:
   fallback: true

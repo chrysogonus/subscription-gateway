@@ -10,7 +10,8 @@ from typing import Any
 
 from subscription_gateway.compat.openai_chat import messages_to_prompt
 from subscription_gateway.config import CodexSettings
-from subscription_gateway.errors import ProviderError
+from subscription_gateway.errors import ProviderError, invalid_request
+from subscription_gateway.model_names import is_valid_provider_model
 from subscription_gateway.providers.base import (
     Provider,
     ProviderCapabilities,
@@ -37,7 +38,7 @@ class CodexProvider(Provider):
     )
 
     def __init__(self, settings: CodexSettings) -> None:
-        super().__init__(configured_models(settings.models))
+        super().__init__(configured_models(settings.models), settings.default_alias)
         self.settings = settings
         self._executable = shutil.which(settings.command)
         self._availability: tuple[float, bool] | None = None
@@ -87,6 +88,13 @@ class CodexProvider(Provider):
     ) -> list[str]:
         if not self._executable:
             raise classify_provider_failure(self.name, "unavailable")
+        # Also covers provider_model values replayed from a stored session, which
+        # reach argv without passing through config or routing validation.
+        if not is_valid_provider_model(model):
+            raise invalid_request(
+                f"Model name '{model}' is not a valid provider model.",
+                code="invalid_model_name",
+            )
         if session_id and not session_id.startswith("pending:"):
             return [
                 self._executable,

@@ -110,8 +110,16 @@ def classify_provider_failure(provider: str, diagnostic: str) -> ProviderError:
         for marker in (
             "model not found",
             "unknown model",
+            "unsupported model",
             "model is not available",
             "invalid model",
+            # Observed wording. Codex, for a model outside the account's plan:
+            # "The 'x' model is not supported when using Codex with a ChatGPT account."
+            "model is not supported",
+            # Claude, for an unknown or inaccessible model: "There's an issue with
+            # the selected model (x). It may not exist or you may not have access to it."
+            "issue with the selected model",
+            "may not have access to it",
         )
     ):
         return ProviderError(

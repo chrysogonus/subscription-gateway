@@ -9,6 +9,7 @@ dist/
 .coverage
 htmlcov/
 .env
+config.yaml
 gateway.db
 *.db-shm
 *.db-wal

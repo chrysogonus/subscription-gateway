@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from subscription_gateway.config import GatewayConfig
+from subscription_gateway.config import ClaudeSettings, CodexSettings, GatewayConfig
 from subscription_gateway.errors import ProviderError
 from subscription_gateway.main import create_app
 from subscription_gateway.providers.base import (
@@ -17,6 +17,7 @@ from subscription_gateway.providers.base import (
     ProviderEvent,
     ProviderResponse,
     ProviderUsage,
+    configured_models,
 )
 
 
@@ -39,12 +40,12 @@ class FakeProvider(Provider):
         error: ProviderError | None = None,
         delay: float = 0,
     ) -> None:
-        default_models = (
-            {"codex/gpt-5.6-sol": "gpt-5.6-sol"}
-            if name == "codex"
-            else {"claude-code/opus-5": "opus"}
+        # Source the catalog from the real settings so the fake cannot drift.
+        settings = CodexSettings() if name == "codex" else ClaudeSettings()
+        super().__init__(
+            models or configured_models(settings.models),
+            settings.default_alias,
         )
-        super().__init__(models or default_models)
         self.name = name
         self.display_name = "Codex" if name == "codex" else "Claude Code"
         self.text = text

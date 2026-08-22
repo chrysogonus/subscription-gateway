@@ -11,10 +11,15 @@ services:
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_ALLOW_REMOTE: "true"
       GATEWAY_SQLITE_PATH: /data/gateway.db
+      SUBSCRIPTION_GATEWAY_CONFIG: /etc/subscription-gateway/config.yaml
     ports:
       - "127.0.0.1:11435:11435"
     volumes:
       - gateway-data:/data
+      # Model catalog and other settings. The default must be a file that always
+      # exists: Docker creates a directory for a missing bind source, and the
+      # gateway then refuses to start. Environment variables above still win.
+      - ${GATEWAY_CONFIG_FILE:-./config.example.yaml}:/etc/subscription-gateway/config.yaml:ro
       - ${HOST_CODEX_HOME:-${HOME}/.codex}:/home/gateway/.codex:rw
       - ${HOST_CLAUDE_HOME:-${HOME}/.claude}:/home/gateway/.claude:rw
       - ${HOST_CLAUDE_CONFIG:-${HOME}/.claude.json}:/home/gateway/.claude.json:rw
@@ -26,6 +31,11 @@ services:
     restart: unless-stopped
 
   open-webui:
+    # Optional chat UI. It only starts when the "webui" profile is selected,
+    # through `make up-webui`, `docker compose --profile webui up`, or a
+    # persistent COMPOSE_PROFILES=webui in .env.
+    profiles:
+      - webui
     image: ghcr.io/open-webui/open-webui:${OPEN_WEBUI_VERSION:-v0.11.0-slim}
     depends_on:
       gateway:

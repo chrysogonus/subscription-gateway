@@ -5,7 +5,7 @@ import json
 import pytest
 
 from subscription_gateway.config import ClaudeSettings
-from subscription_gateway.errors import ProviderError
+from subscription_gateway.errors import GatewayError, ProviderError
 from subscription_gateway.providers.claude import ClaudeProvider, parse_claude_result
 from subscription_gateway.providers.process import ProcessResult
 
@@ -40,6 +40,25 @@ def test_claude_usage_limit_is_normalized() -> None:
     assert caught.value.status_code == 429
 
 
+def test_claude_rejected_model_is_classified_as_model_not_available() -> None:
+    """Verbatim message from `claude --print --model <unknown>`. If the CLI
+    rewords this, the failure is misclassified as retryable and the request
+    silently falls back to another provider."""
+
+    payload = {
+        "is_error": True,
+        "subtype": "success",
+        "api_error_status": 404,
+        "result": (
+            "There's an issue with the selected model (gpt-9). It may not exist "
+            "or you may not have access to it. Run --model to pick a different model."
+        ),
+    }
+    with pytest.raises(ProviderError) as caught:
+        parse_claude_result(ProcessResult(0, json.dumps(payload), ""))
+    assert caught.value.code == "model_not_available"
+
+
 def test_claude_command_disables_tools_for_chat() -> None:
     provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
     command = provider.build_command(
@@ -67,3 +86,31 @@ def test_claude_command_resumes_session() -> None:
     )
     assert command[command.index("--resume") + 1] == "42c5f7a2-98bf-4f0a-b86f-53ad6d42e059"
     assert command[command.index("--allowedTools") + 1] == "Read,Glob,Grep"
+
+
+def test_claude_command_rejects_flag_like_model() -> None:
+    """A provider_model replayed from storage reaches argv without other checks."""
+
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+    with pytest.raises(GatewayError) as caught:
+        provider.build_command(
+            session_id=None,
+            model="--dangerously-skip-permissions",
+            prompt="hi",
+            permissions="read-only",
+            agent_task=False,
+        )
+    assert caught.value.code == "invalid_model_name"
+    assert caught.value.status_code == 400
+
+
+def test_claude_command_accepts_full_model_name() -> None:
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+    command = provider.build_command(
+        session_id=None,
+        model="claude-fable-5",
+        prompt="hi",
+        permissions="read-only",
+        agent_task=False,
+    )
+    assert command[command.index("--model") + 1] == "claude-fable-5"

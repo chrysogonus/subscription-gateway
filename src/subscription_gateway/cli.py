@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from subscription_gateway import __version__
 from subscription_gateway.config import GatewayConfig, load_config
 from subscription_gateway.main import create_app
+from subscription_gateway.model_names import PROVIDER_PREFIX_BY_NAME
 from subscription_gateway.providers.registry import ProviderRegistry
 from subscription_gateway.sessions.storage import SQLiteSessionStorage
 
@@ -63,6 +64,9 @@ async def _status(config: GatewayConfig) -> int:
         print("    models:")
         for model in provider.models:
             print(f"      {model}")
+        prefix = PROVIDER_PREFIX_BY_NAME.get(provider.name)
+        if prefix:
+            print(f"      (plus any other model the CLI accepts, as {prefix}<model>)")
     return 0
 
 
@@ -147,7 +151,7 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     try:
         config = _load(args)
-    except (ValueError, ValidationError) as exc:
+    except (OSError, ValueError, ValidationError) as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
 

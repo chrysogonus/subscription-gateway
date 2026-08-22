@@ -33,3 +33,21 @@ def test_model_listing_shape(client: TestClient) -> None:
         "object": "model",
         "owned_by": "local-gateway",
     }
+
+
+def test_models_lists_the_full_default_catalog(gateway_config: GatewayConfig) -> None:
+    codex = FakeProvider("codex")
+    claude = FakeProvider("claude")
+    with TestClient(
+        create_app(gateway_config, providers={"codex": codex, "claude": claude})
+    ) as test_client:
+        listed = [item["id"] for item in test_client.get("/v1/models").json()["data"]]
+
+    assert listed == [
+        "codex/gpt-5.6-sol",
+        "claude-code/opus",
+        "claude-code/sonnet",
+        "claude-code/haiku",
+        "claude-code/fable",
+        "subscription/auto",
+    ]

@@ -54,6 +54,8 @@ async def create_response(
         gateway_session_id=session_id,
     )
     response.headers["X-Gateway-Session"] = result.gateway_session_id
+    response.headers["X-Gateway-Provider"] = result.provider
+    response.headers["X-Gateway-Model"] = result.executed_model
     return responses_response(
         result.response,
         model=body.model,

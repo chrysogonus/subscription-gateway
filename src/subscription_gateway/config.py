@@ -5,17 +5,39 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
+from subscription_gateway.model_names import (
+    AUTO_MODEL,
+    PROVIDER_MODEL_PATTERN,
+    PROVIDER_PREFIXES,
+    is_valid_provider_model,
+)
+
 
 class ModelSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     provider_model: str
+    default: bool = False
+
+    @field_validator("provider_model")
+    @classmethod
+    def validate_provider_model(cls, value: str) -> str:
+        if not is_valid_provider_model(value):
+            raise ValueError(
+                f"provider_model must match '{PROVIDER_MODEL_PATTERN.pattern}' "
+                "(no leading '-', no spaces, no slashes)"
+            )
+        return value
 
 
 class ProviderSettings(BaseModel):
+    alias_prefix: ClassVar[str | None] = None
+
     enabled: bool = True
     command: str
     max_concurrent: int = Field(default=1, ge=1, le=32)
@@ -29,19 +51,53 @@ class ProviderSettings(BaseModel):
     def expand_working_directory(cls, value: str | Path) -> Path:
         return Path(value).expanduser()
 
+    @model_validator(mode="after")
+    def validate_models(self) -> ProviderSettings:
+        if AUTO_MODEL in self.models:
+            raise ValueError(f"'{AUTO_MODEL}' is reserved and cannot be a model alias")
+        foreign = sorted(
+            alias
+            for alias in self.models
+            for prefix in PROVIDER_PREFIXES
+            if prefix != self.alias_prefix and alias.startswith(prefix)
+        )
+        if foreign:
+            raise ValueError(f"aliases belong to another provider: {foreign}")
+        defaults = sorted(alias for alias, model in self.models.items() if model.default)
+        if len(defaults) > 1:
+            raise ValueError(f"at most one model may set default: true; got {defaults}")
+        return self
+
+    @property
+    def default_alias(self) -> str | None:
+        """The alias `subscription/auto` routes to, or None to use the first entry."""
+
+        return next((alias for alias, model in self.models.items() if model.default), None)
+
 
 class CodexSettings(ProviderSettings):
+    alias_prefix: ClassVar[str | None] = "codex/"
+
     command: str = "codex"
     max_concurrent: int = Field(default=2, ge=1, le=32)
     models: dict[str, ModelSettings] = Field(
-        default_factory=lambda: {"codex/gpt-5.6-sol": ModelSettings(provider_model="gpt-5.6-sol")}
+        default_factory=lambda: {
+            "codex/gpt-5.6-sol": ModelSettings(provider_model="gpt-5.6-sol", default=True),
+        }
     )
 
 
 class ClaudeSettings(ProviderSettings):
+    alias_prefix: ClassVar[str | None] = "claude-code/"
+
     command: str = "claude"
     models: dict[str, ModelSettings] = Field(
-        default_factory=lambda: {"claude-code/opus-5": ModelSettings(provider_model="opus")}
+        default_factory=lambda: {
+            "claude-code/opus": ModelSettings(provider_model="opus", default=True),
+            "claude-code/sonnet": ModelSettings(provider_model="sonnet"),
+            "claude-code/haiku": ModelSettings(provider_model="haiku"),
+            "claude-code/fable": ModelSettings(provider_model="fable"),
+        }
     )
 
 

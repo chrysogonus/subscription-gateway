@@ -6,6 +6,12 @@ import asyncio
 from dataclasses import dataclass
 
 from subscription_gateway.config import GatewayConfig
+from subscription_gateway.model_names import (
+    AUTO_MODEL,
+    LEGACY_ALIASES,
+    is_valid_provider_model,
+    split_prefixed,
+)
 from subscription_gateway.providers.base import Provider
 from subscription_gateway.providers.claude import ClaudeProvider
 from subscription_gateway.providers.codex import CodexProvider
@@ -20,6 +26,13 @@ class ProviderStatus:
     authenticated: bool
     available: bool
     models: list[str]
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedModel:
+    provider: Provider
+    provider_model: str
+    catalogued: bool
 
 
 class ProviderRegistry:
@@ -39,13 +52,42 @@ class ProviderRegistry:
             None,
         )
 
+    def resolve(self, public_model: str) -> ResolvedModel | None:
+        """Configured aliases win; unlisted `codex/<x>` and `claude-code/<x>` pass through.
+
+        Catalog-before-passthrough precedence is load-bearing: it is what keeps a
+        legacy or re-pointed alias from being reinterpreted as its own suffix.
+        """
+
+        owner = self.owner_of(public_model)
+        if owner is not None:
+            provider_model = owner.provider_model(public_model)
+            assert provider_model is not None
+            return ResolvedModel(owner, provider_model, catalogued=True)
+
+        legacy = LEGACY_ALIASES.get(public_model)
+        if legacy is not None:
+            legacy_provider = self.providers.get(legacy[0])
+            if legacy_provider is None:
+                return None
+            return ResolvedModel(legacy_provider, legacy[1], catalogued=True)
+
+        split = split_prefixed(public_model)
+        if split is None:
+            return None
+        provider_name, suffix = split
+        provider = self.providers.get(provider_name)
+        if provider is None or not is_valid_provider_model(suffix):
+            return None
+        return ResolvedModel(provider, suffix, catalogued=False)
+
     async def available_models(self) -> list[str]:
         listed = await asyncio.gather(
             *(provider.list_models() for provider in self.providers.values())
         )
         models = [model for provider_models in listed for model in provider_models]
         if models:
-            models.append("subscription/auto")
+            models.append(AUTO_MODEL)
         return models
 
     async def statuses(self) -> list[ProviderStatus]:

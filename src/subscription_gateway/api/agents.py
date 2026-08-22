@@ -76,6 +76,8 @@ async def run_agent(
         agent_task=True,
     )
     response.headers["X-Gateway-Session"] = result.gateway_session_id
+    response.headers["X-Gateway-Provider"] = result.provider
+    response.headers["X-Gateway-Model"] = result.executed_model
     return {
         "id": f"agent_{uuid.uuid4().hex}",
         "model": body.model,

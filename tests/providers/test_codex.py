@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from subscription_gateway.config import CodexSettings
-from subscription_gateway.errors import ProviderError
+from subscription_gateway.errors import GatewayError, ProviderError
 from subscription_gateway.providers import codex as codex_module
 from subscription_gateway.providers.codex import CodexProvider, parse_codex_result
 from subscription_gateway.providers.process import ProcessResult
@@ -44,6 +44,26 @@ def test_codex_malformed_output_is_protocol_error() -> None:
     assert caught.value.code == "provider_malformed_output"
 
 
+def test_codex_rejected_model_is_classified_as_model_not_available() -> None:
+    """Verbatim message from `codex exec --model <not-on-plan>`. If the CLI
+    rewords this, the failure is misclassified as retryable and the request
+    silently falls back to another provider."""
+
+    event = {
+        "type": "turn.failed",
+        "error": {
+            "message": (
+                '{"type":"error","status":400,"error":{"type":"invalid_request_error",'
+                '"message":"The \'gpt-9\' model is not supported when using Codex '
+                'with a ChatGPT account."}}'
+            )
+        },
+    }
+    with pytest.raises(ProviderError) as caught:
+        parse_codex_result(ProcessResult(1, json.dumps(event), ""))
+    assert caught.value.code == "model_not_available"
+
+
 def test_codex_command_is_argument_array_and_resume_aware() -> None:
     provider = CodexProvider(CodexSettings(command="/bin/echo"))
     initial = provider.build_command(
@@ -65,6 +85,32 @@ def test_codex_command_is_argument_array_and_resume_aware() -> None:
     assert resumed[1:3] == ["exec", "resume"]
     assert "--ignore-user-config" in resumed
     assert "thread-123" in resumed
+
+
+def test_codex_command_rejects_flag_like_model() -> None:
+    """A provider_model replayed from storage reaches argv without other checks."""
+
+    provider = CodexProvider(CodexSettings(command="/bin/echo"))
+    with pytest.raises(GatewayError) as caught:
+        provider.build_command(
+            session_id=None,
+            model="--sandbox",
+            prompt="hi",
+            permissions="read-only",
+        )
+    assert caught.value.code == "invalid_model_name"
+    assert caught.value.status_code == 400
+
+
+def test_codex_command_accepts_dotted_model() -> None:
+    provider = CodexProvider(CodexSettings(command="/bin/echo"))
+    command = provider.build_command(
+        session_id=None,
+        model="us.openai.gpt-5.6-sol",
+        prompt="hi",
+        permissions="read-only",
+    )
+    assert command[command.index("--model") + 1] == "us.openai.gpt-5.6-sol"
 
 
 @pytest.mark.asyncio

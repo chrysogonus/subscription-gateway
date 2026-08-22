@@ -67,6 +67,10 @@ pytest
 
 With `uv`, `uv sync --all-extras` is equivalent and uses the checked-in lock file.
 
+A `Makefile` wraps the commands used most often. `make help` lists every target;
+`make dev` installs the development extras, preferring `uv` and the lock file when `uv`
+is installed and falling back to `.venv` and `pip` otherwise.
+
 ## Starting
 
 ```bash
@@ -104,12 +108,23 @@ Clients then send `Authorization: Bearer local-secret`. This token protects the 
 is never used for Codex or Claude authentication. Without a configured token, localhost requests
 are accepted.
 
+Docker deployments always have a token. Compose sets `GATEWAY_API_KEY: ${GATEWAY_API_KEY:-local}`,
+so the key is `local` unless `.env` or the environment overrides it, and requests without the
+header are rejected with `invalid_api_key`. Setting the variable to an empty value does not
+disable authentication: `${GATEWAY_API_KEY:-local}` treats empty as unset and falls back to
+`local`.
+
 ## API examples
+
+The examples below send `Authorization: Bearer local`, which matches the Compose default. Drop
+the header when running `subscription-gateway serve` directly with no key configured, or change
+the value to the configured token.
 
 List usable models:
 
 ```bash
-curl http://127.0.0.1:11435/v1/models
+curl http://127.0.0.1:11435/v1/models \
+  -H 'Authorization: Bearer local'
 ```
 
 Run Codex:
@@ -117,6 +132,7 @@ Run Codex:
 ```bash
 curl http://127.0.0.1:11435/v1/chat/completions \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local' \
   -d '{
     "model": "codex/gpt-5.6-sol",
     "messages": [
@@ -130,8 +146,9 @@ Run Claude Code:
 ```bash
 curl http://127.0.0.1:11435/v1/chat/completions \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local' \
   -d '{
-    "model": "claude-code/opus-5",
+    "model": "claude-code/opus",
     "messages": [
       {"role": "user", "content": "Explain Linux namespaces."}
     ]
@@ -143,6 +160,7 @@ Stream Chat Completions-compatible SSE:
 ```bash
 curl -N http://127.0.0.1:11435/v1/chat/completions \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local' \
   -d '{
     "model": "subscription/auto",
     "stream": true,
@@ -166,6 +184,7 @@ them. This is another reason the gateway does not describe itself as a raw model
 ```bash
 curl http://127.0.0.1:11435/v1/responses \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local' \
   -d '{"model":"subscription/auto","input":"Explain cgroups briefly."}'
 ```
 
@@ -176,7 +195,8 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://127.0.0.1:11435/v1",
-    api_key="local",  # Any non-empty value works when gateway auth is disabled.
+    api_key="local",  # The configured GATEWAY_API_KEY; any non-empty value works
+                      # only when the gateway runs with no key configured.
 )
 
 response = client.chat.completions.create(
@@ -194,10 +214,28 @@ print(response.choices[0].message.content)
 
 ### OpenWebUI
 
-Docker Compose includes a preconfigured OpenWebUI service. Start the stack and open
-`http://127.0.0.1:3001`. On the first visit, create the local administrator account. The model
-picker is populated from the gateway's live `/v1/models` response and shows usable Codex, Claude
-Code, and routing aliases.
+Docker Compose includes a preconfigured OpenWebUI service, but it is optional and is not
+deployed unless it is requested. It sits in the Compose `webui` profile, so the gateway can
+run on its own for API-only use:
+
+```bash
+make up              # gateway only
+make up-webui        # gateway and OpenWebUI
+```
+
+`make up WEBUI=1` is the same choice spelled as a variable, and the equivalent without
+`make` is `docker compose --profile webui up --detach`. To make the choice permanent for
+this machine, set `COMPOSE_PROFILES=webui` in `.env`.
+
+With the UI deployed, open `http://127.0.0.1:3001`. On the first visit, create the local
+administrator account. The model picker is populated from the gateway's live `/v1/models`
+response and shows usable Codex, Claude Code, and routing aliases.
+
+The decision is reversible at any time. `make up-webui` adds the UI container next to an
+already running gateway, and `make down` followed by `make up` leaves the gateway running
+without it. The `open-webui-data` volume survives either direction, so accounts and chats
+return if the UI is redeployed later; `make purge CONFIRM=1` is the explicit way to delete
+those volumes.
 
 The Compose connection uses `http://gateway:11435/v1` on the private container network. Ollama is
 disabled, so the model picker is not cluttered by an unavailable default backend. OpenWebUI state
@@ -221,6 +259,58 @@ If OpenWebUI itself runs in Docker, `127.0.0.1` refers to that container. On Doc
 carefully configured local container network. Do not broaden the gateway bind without enabling
 its API key.
 
+## Models
+
+Two kinds of model name work. **Catalogued** models are the ones listed in configuration; they are
+the only names `/v1/models` can advertise, so they are what a client's model picker shows:
+
+| Model | Runs as |
+| --- | --- |
+| `codex/gpt-5.6-sol` | `codex --model gpt-5.6-sol` |
+| `claude-code/opus` | `claude --model opus` |
+| `claude-code/sonnet` | `claude --model sonnet` |
+| `claude-code/haiku` | `claude --model haiku` |
+| `claude-code/fable` | `claude --model fable` |
+| `subscription/auto` | the `default: true` model of the first available provider |
+
+The Claude entries are tier aliases, so they always resolve to the newest model of that tier
+without a config change.
+
+**Passthrough** covers everything else: any `codex/<model>` or `claude-code/<model>` that is not
+catalogued has its suffix passed to the CLI verbatim.
+
+```bash
+curl http://127.0.0.1:11435/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local' \
+  -d '{
+    "model": "claude-code/claude-fable-5",
+    "messages": [{"role": "user", "content": "Explain Linux namespaces."}]
+  }'
+```
+
+Four things to know about passthrough:
+
+- Names are validated before reaching the CLI. A name must start with a letter, digit, or
+  underscore and may otherwise contain only letters, digits, `.`, `_`, `:`, and `-`. Anything
+  else — an empty suffix, a leading `-`, spaces, slashes — is rejected with 404 without starting a
+  subprocess.
+- Passthrough models cannot appear in `/v1/models`, because neither CLI can enumerate its models.
+  OpenWebUI's picker has no free-text field, so passthrough is for API callers. To use a model in
+  a UI, add it to `models` in `config.yaml` and it becomes catalogued.
+- The Codex adapter runs with `--ignore-user-config`, so model profiles and aliases defined in
+  `~/.codex/config.toml` do **not** resolve. Only names the Codex CLI accepts natively work.
+- If the runtime rejects the model, the request fails with `model_not_available` rather than
+  falling back to another provider.
+
+Responses carry `X-Gateway-Provider` and `X-Gateway-Model` headers naming the provider and model
+that actually ran, which is worth checking when `subscription/auto` may have fallen back.
+
+`claude-code/opus-5`, the alias earlier versions shipped, still resolves to `opus` but is no longer
+advertised. Sessions started under it keep working. Note that continuing such a session while
+sending `claude-code/opus` returns `session_model_mismatch`: the names are compared as strings even
+though they select the same model.
+
 ## Sessions
 
 Every successful request creates a gateway UUID and returns it in both the
@@ -230,6 +320,7 @@ thread by sending the header back:
 ```bash
 curl http://127.0.0.1:11435/v1/chat/completions \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local' \
   -H 'X-Gateway-Session: <uuid>' \
   -d '{
     "model": "codex/gpt-5.6-sol",
@@ -253,6 +344,7 @@ behavior. OpenAI `system` and `developer` roles therefore cannot be reproduced e
 ```bash
 curl http://127.0.0.1:11435/v1/agents/run \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local' \
   -d '{
     "model": "codex/gpt-5.6-sol",
     "prompt": "Find the failing tests and explain the cause.",
@@ -269,9 +361,13 @@ request-level `fallback: true` and `agent.allow_write_fallback: true`.
 ## Routing, fallback, and scheduling
 
 - Explicit `codex/*` and `claude-code/*` aliases route directly.
-- `subscription/auto` follows `routing.order` and defaults to Codex.
-- Retryable unavailability, temporary, model, usage-limit, and timeout failures may fall back for
+- `subscription/auto` follows `routing.order` and defaults to Codex. Within a provider it uses the
+  model marked `default: true`, or the first configured model when none is marked.
+- Retryable unavailability, temporary, usage-limit, and timeout failures may fall back for
   stateless chat requests when enabled.
+- A model the caller named explicitly never falls back when the runtime rejects the model itself:
+  no other provider can supply that model, and answering from a different one would misattribute
+  the reply. `subscription/auto` still falls back, because the caller named no model.
 - Existing sessions never cross providers.
 - Write-capable agent operations do not fall back by default.
 - Provider semaphores queue excess work; defaults are two Codex and one Claude request.
@@ -294,7 +390,7 @@ implementation can replace it without changing routing or HTTP code.
 
 Configured aliases are not automatic guarantees of account-level model access. If a local client
 version or plan does not offer an alias's `provider_model`, the gateway returns
-`model_not_available`. Add more aliases under the provider's `models` mapping.
+`model_not_available`.
 
 ## Docker
 
@@ -310,27 +406,33 @@ codex login status
 claude auth status
 ```
 
-Then start the gateway and OpenWebUI:
+Then start the gateway, deciding whether the optional chat UI is deployed with it:
 
 ```bash
-export GATEWAY_UID="$(id -u)"       # Linux; usually 1000
 export GATEWAY_API_KEY=local        # Change this if desired
-docker compose up --build --detach
 
-docker compose ps
-docker compose exec gateway subscription-gateway status
+make up                             # gateway only
+make up-webui                       # gateway and OpenWebUI
+
+make ps
+make docker-status
 ```
 
-Open the chat UI at `http://127.0.0.1:3001`. Both the UI and gateway API ports are bound to the
-host loopback interface. The first OpenWebUI account becomes the local administrator; keep its
-credentials private even though the service is not published remotely.
+The `make` targets export `GATEWAY_UID` from `id -u` themselves. Without `make`, set it by
+hand and select the profile explicitly:
+
+```bash
+export GATEWAY_UID="$(id -u)"                          # Linux; usually 1000
+docker compose up --build --detach                     # gateway only
+docker compose --profile webui up --build --detach     # gateway and OpenWebUI
+```
+
+When OpenWebUI is deployed, open the chat UI at `http://127.0.0.1:3001`. Both the UI and gateway
+API ports are bound to the host loopback interface. The first OpenWebUI account becomes the local
+administrator; keep its credentials private even though the service is not published remotely.
 
 The first image build installs Codex and Claude Code and can take several minutes. Subsequent
-starts use the cached image:
-
-```bash
-docker compose up --detach
-```
+starts use the cached image.
 
 Test it from the host:
 
@@ -347,7 +449,24 @@ Compose defaults are:
 - Claude user state: `$HOME/.claude.json` mounted at `/home/gateway/.claude.json`;
 - agent workspace: `$HOME/workspace` mounted at `/home/gateway/workspace`;
 - SQLite metadata: the Docker-managed `gateway-data` volume.
-- OpenWebUI: `http://127.0.0.1:3001`, with data in the `open-webui-data` volume;
+- OpenWebUI: not deployed unless the `webui` profile is selected; when it is,
+  `http://127.0.0.1:3001`, with data in the `open-webui-data` volume;
+
+The container reads `config.yaml` from a read-only mount, which is how the model catalog is
+customized in Docker — no environment variable configures models. It defaults to
+`./config.example.yaml`, and the `make` targets point it at `./config.yaml` as soon as that file
+exists:
+
+```bash
+make config          # copy config.example.yaml to config.yaml
+$EDITOR config.yaml  # add models under providers.<name>.models
+make up
+```
+
+Without `make`, set `GATEWAY_CONFIG_FILE` yourself. Point it only at a file that exists: Docker
+creates a *directory* for a missing bind source, and the gateway then refuses to start. The
+environment variables in `docker-compose.yml` are applied after the file, so `GATEWAY_HOST`,
+`GATEWAY_API_KEY`, and `GATEWAY_SQLITE_PATH` still win over anything it sets.
 
 Override host paths or pinned CLI releases through the variables shown in
 `.env.docker.example`. Compose automatically reads a file named `.env`, so one option is:
@@ -381,8 +500,11 @@ For agent requests, use the container path—not the host path:
 Stop the stack without deleting either persistent volume:
 
 ```bash
-docker compose down
+make down
 ```
+
+`make down` includes the `webui` profile, so it removes the OpenWebUI container as well even
+when the last `make up` did not start it.
 
 ## Platform support
 
@@ -393,10 +515,34 @@ Windows users should run the first prototype in WSL.
 ## Development checks
 
 ```bash
+make check          # ruff, mypy, and pytest
+```
+
+Individually:
+
+```bash
 pytest
 ruff check .
 mypy src/subscription_gateway
 ```
+
+## Make targets
+
+`make help` prints the current list. The most useful ones:
+
+| Target | Purpose |
+| --- | --- |
+| `dev`, `install` | Install with or without development extras |
+| `check` | `lint`, `typecheck`, and `test` |
+| `test`, `lint`, `fix`, `typecheck` | Individual checks; `fix` applies ruff autofixes and formatting |
+| `serve`, `status`, `doctor` | Run the CLI locally, using `./config.yaml` when it exists |
+| `config`, `env` | Create `config.yaml` and `.env` from the examples, never overwriting |
+| `up`, `up-webui` | Deploy without or with OpenWebUI |
+| `down`, `restart`, `ps`, `logs` | Manage the deployed stack |
+| `shell`, `docker-status`, `docker-doctor` | Inspect the gateway container |
+| `smoke` | Curl `/health` and `/v1/models` against a running gateway |
+| `dist`, `clean` | Build the wheel and sdist; remove artifacts and caches |
+| `purge CONFIRM=1` | Remove containers and their data volumes (destructive) |
 
 Tests use mock providers and mocked process results. They do not require provider installations,
 credentials, network access, or subscription usage.
