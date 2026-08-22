@@ -25,5 +25,32 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
 
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:${OPEN_WEBUI_VERSION:-v0.11.0-slim}
+    depends_on:
+      gateway:
+        condition: service_healthy
+    environment:
+      ENABLE_OLLAMA_API: "false"
+      ENABLE_OPENAI_API: "true"
+      OPENAI_API_BASE_URL: http://gateway:11435/v1
+      OPENAI_API_KEY: ${GATEWAY_API_KEY:-local}
+      WEBUI_NAME: Subscription LLM Gateway
+      WEBUI_SECRET_KEY: ${OPEN_WEBUI_SECRET_KEY:-}
+    ports:
+      - "127.0.0.1:${OPEN_WEBUI_PORT:-3001}:8080"
+    volumes:
+      - open-webui-data:/app/backend/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 6
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
 volumes:
   gateway-data:
+  open-webui-data:

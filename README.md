@@ -4,17 +4,17 @@ A local interoperability gateway that exposes models available through the user'
 authenticated Codex and Claude Code clients through a small OpenAI-compatible HTTP API.
 
 ```text
-OpenAI-compatible applications
-             |
-             v
- http://127.0.0.1:11435/v1
-             |
-             v
- Subscription LLM Gateway
-       |             |
-       v             v
-  codex exec     claude --print
-  (ChatGPT auth) (Claude auth)
+OpenWebUI / OpenAI-compatible applications
+                    |
+                    v
+        http://127.0.0.1:11435/v1
+                    |
+                    v
+        Subscription LLM Gateway
+              |             |
+              v             v
+         codex exec     claude --print
+         (ChatGPT auth) (Claude auth)
 ```
 
 Inference is not local. Codex and Claude Code still use OpenAI and Anthropic infrastructure and
@@ -194,7 +194,18 @@ print(response.choices[0].message.content)
 
 ### OpenWebUI
 
-In OpenWebUI, add an OpenAI-compatible connection:
+Docker Compose includes a preconfigured OpenWebUI service. Start the stack and open
+`http://127.0.0.1:3001`. On the first visit, create the local administrator account. The model
+picker is populated from the gateway's live `/v1/models` response and shows usable Codex, Claude
+Code, and routing aliases.
+
+The Compose connection uses `http://gateway:11435/v1` on the private container network. Ollama is
+disabled, so the model picker is not cluttered by an unavailable default backend. OpenWebUI state
+is stored in the `open-webui-data` Docker volume. The pinned slim image avoids bundling a large
+local embedding model; ordinary chat works normally, while knowledge/RAG features may download
+their selected embedding model during the first startup.
+
+For a separately installed OpenWebUI instance, add an OpenAI-compatible connection:
 
 - URL: `http://127.0.0.1:11435/v1` when OpenWebUI runs natively;
 - API key: the configured `GATEWAY_API_KEY`, or any non-empty placeholder if auth is disabled;
@@ -294,7 +305,7 @@ codex login status
 claude auth status
 ```
 
-Then start the gateway:
+Then start the gateway and OpenWebUI:
 
 ```bash
 export GATEWAY_UID="$(id -u)"       # Linux; usually 1000
@@ -304,6 +315,10 @@ docker compose up --build --detach
 docker compose ps
 docker compose exec gateway subscription-gateway status
 ```
+
+Open the chat UI at `http://127.0.0.1:3001`. Both the UI and gateway API ports are bound to the
+host loopback interface. The first OpenWebUI account becomes the local administrator; keep its
+credentials private even though the service is not published remotely.
 
 The first image build installs Codex and Claude Code and can take several minutes. Subsequent
 starts use the cached image:
@@ -327,6 +342,7 @@ Compose defaults are:
 - Claude user state: `$HOME/.claude.json` mounted at `/home/gateway/.claude.json`;
 - agent workspace: `$HOME/workspace` mounted at `/home/gateway/workspace`;
 - SQLite metadata: the Docker-managed `gateway-data` volume.
+- OpenWebUI: `http://127.0.0.1:3001`, with data in the `open-webui-data` volume;
 
 Override host paths or pinned CLI releases through the variables shown in
 `.env.docker.example`. Compose automatically reads a file named `.env`, so one option is:
@@ -357,7 +373,7 @@ For agent requests, use the container path—not the host path:
 }
 ```
 
-Stop the service without deleting its SQLite volume:
+Stop the stack without deleting either persistent volume:
 
 ```bash
 docker compose down
