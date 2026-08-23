@@ -8,25 +8,10 @@ permissions:
   contents: read
 
 jobs:
+  # The release gate is the CI workflow itself, at this tag's commit, so a tag
+  # cannot ship having passed a weaker set of checks than main did.
   checks:
-    name: checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Install the project
-        run: uv sync --all-extras --frozen
-
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run mypy src/subscription_gateway
-      - run: uv run pytest
+    uses: ./.github/workflows/ci.yml
 
   release:
     name: publish GitHub Release

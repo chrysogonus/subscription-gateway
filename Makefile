@@ -113,10 +113,10 @@ fix: ## Apply ruff autofixes and formatting
 	$(RUN) $(BIN)ruff format .
 
 typecheck: ## Type-check with mypy
-	$(RUN) $(BIN)mypy src/subscription_gateway
+	$(RUN) $(BIN)mypy
 
 coverage: ## Run the test suite with a coverage report
-	$(RUN) $(BIN)pytest --cov --cov-report=term-missing
+	$(RUN) $(BIN)pytest --cov
 
 check: lint typecheck test ## Run lint, typecheck, and tests
 

@@ -12,8 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MIT `LICENSE` file, matching the license already declared in package metadata.
 - Community health files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`,
   issue and pull request templates, and `CODEOWNERS`.
-- GitHub Actions: `ci.yml` (ruff, ruff format, mypy, pytest on Python 3.12 and 3.13,
-  plus a Docker build smoke test) and `release.yml` (tag-triggered GitHub Release).
+- GitHub Actions: `ci.yml` (ruff, ruff format, and mypy once; pytest on Python 3.12
+  and 3.13; plus a Docker build smoke test) and `release.yml` (tag-triggered GitHub
+  Release, gated on the CI workflow).
 - Dependabot updates for pip, GitHub Actions, and Docker.
 - `docs/` with configuration, API, models and routing, Docker, and architecture guides,
   split out of the README.
