@@ -22,15 +22,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make coverage` and `make precommit` targets; `pytest-cov` in the development extra.
 - `.editorconfig` and a `.pre-commit-config.yaml` with ruff and whitespace hooks.
 - OCI image labels on the Docker image.
+- Tests for the `subscription-gateway` CLI, the subprocess reaping guarantees in
+  `providers/process.py`, log formatting and redaction, and the `/v1/responses`
+  streaming path. Coverage rose from 75% to 87%.
 
 ### Changed
 
+- Ruff now enforces `S` (flake8-bandit), `SIM`, `RUF`, `PT`, and `PTH` alongside the
+  existing rules; `mypy --strict` now checks `tests/` as well as `src/`.
+- `pytest` turns warnings into errors and runs with `--strict-markers`
+  `--strict-config`; coverage fails under 85%.
+- The Docker image installs its dependencies from `uv.lock` — the same resolution
+  CI tests — with pip verifying the exported hashes, instead of resolving fresh at
+  build time. A stale lock now fails the image build.
 - The version is now read from installed package metadata instead of being
   hardcoded in `__init__.py` and the FastAPI constructor; `pyproject.toml` is the
   single source of truth.
 - Package metadata gained `keywords`, `classifiers`, and `[project.urls]`, and the
   license is declared as an SPDX expression.
 - The README is now a landing page; deep reference material moved to `docs/`.
+
+### Fixed
+
+- `subscription-gateway --version` no longer crashes in the container image. Importing
+  `subscription_gateway.main` built the ASGI app eagerly, so it loaded and validated the
+  configuration; the image ENV asks for a non-loopback bind with no API key set yet, and
+  the resulting `ValidationError` broke every CLI entry point, including the CI smoke
+  test. `main:app` is now constructed on first attribute access.
+- `ProviderRegistry.resolve` no longer relies on an `assert` for a load-bearing
+  invariant, which would be stripped under `python -O`.
 
 ## [0.1.0] - 2026-08-20
 
