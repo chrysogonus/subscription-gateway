@@ -61,9 +61,13 @@ class ProviderRegistry:
 
         owner = self.owner_of(public_model)
         if owner is not None:
+            # owner_of already matched on membership in owner.models, so this
+            # lookup cannot miss. Branch rather than assert: an assert is
+            # stripped under -O, and falling through to passthrough is a safer
+            # degradation than constructing a ResolvedModel from None.
             provider_model = owner.provider_model(public_model)
-            assert provider_model is not None
-            return ResolvedModel(owner, provider_model, catalogued=True)
+            if provider_model is not None:
+                return ResolvedModel(owner, provider_model, catalogued=True)
 
         legacy = LEGACY_ALIASES.get(public_model)
         if legacy is not None:

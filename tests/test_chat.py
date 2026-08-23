@@ -121,6 +121,90 @@ def test_responses_subset(client: TestClient) -> None:
     assert payload["output"][0]["content"][0]["type"] == "output_text"
 
 
+def test_responses_streaming_sse(client: TestClient) -> None:
+    with client.stream(
+        "POST",
+        "/v1/responses",
+        json={"model": "codex/gpt-5.6-sol", "input": "Hello", "stream": True},
+    ) as response:
+        lines = [line for line in response.iter_lines() if line]
+
+    assert response.status_code == 200
+    assert response.headers["x-gateway-session"]
+    assert lines[-1] == "data: [DONE]"
+    events = [json.loads(line[6:]) for line in lines[:-1]]
+    assert events[0]["type"] == "response.created"
+    assert events[0]["response"]["status"] == "in_progress"
+    deltas = [event for event in events if event["type"] == "response.output_text.delta"]
+    assert "".join(event["delta"] for event in deltas) == "mock answer"
+    assert events[-1]["type"] == "response.completed"
+    assert events[-1]["response"]["output_text"] == "mock answer"
+
+
+def test_responses_streaming_error_is_sse_and_terminates(gateway_config: GatewayConfig) -> None:
+    class BrokenStreamProvider(FakeProvider):
+        async def stream(
+            self,
+            session_id: str | None,
+            model: str,
+            messages: list[dict[str, object]],
+            options: dict[str, object],
+        ) -> AsyncIterator[ProviderEvent]:
+            yield ProviderEvent(type="delta", text="partial")
+            raise ProviderError(
+                "stream failed",
+                error_type="provider_protocol_error",
+                code="provider_stream_failed",
+                status_code=502,
+                provider="codex",
+            )
+
+    with TestClient(
+        create_app(gateway_config, providers={"codex": BrokenStreamProvider()})
+    ) as test_client:
+        response = test_client.post(
+            "/v1/responses",
+            json={"model": "codex/gpt-5.6-sol", "input": "x", "stream": True},
+        )
+
+    assert response.status_code == 200
+    assert '"code":"provider_stream_failed"' in response.text
+    assert response.text.rstrip().endswith("data: [DONE]")
+
+
+def test_responses_rejects_unsupported_features(client: TestClient) -> None:
+    response = client.post(
+        "/v1/responses",
+        json={
+            "model": "codex/gpt-5.6-sol",
+            "input": "x",
+            "previous_response_id": "resp_1",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "unsupported_feature"
+
+
+def test_responses_instructions_become_a_developer_message(
+    client: TestClient, fake_codex: FakeProvider
+) -> None:
+    response = client.post(
+        "/v1/responses",
+        json={
+            "model": "codex/gpt-5.6-sol",
+            "input": [{"role": "user", "content": "Hello"}],
+            "instructions": "Be terse.",
+        },
+    )
+
+    assert response.status_code == 200
+    messages = fake_codex.calls[0]["messages"]
+    assert messages[0] == {"role": "developer", "content": "Be terse."}
+    assert messages[1]["role"] == "user"
+    assert messages[1]["content"] == "Hello"
+
+
 def test_invalid_model_is_normalized(client: TestClient) -> None:
     response = client.post(
         "/v1/chat/completions",

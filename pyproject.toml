@@ -65,21 +65,40 @@ Changelog = "https://github.com/chrysogonus/sub2api/blob/main/CHANGELOG.md"
 packages = ["src/subscription_gateway"]
 
 [tool.pytest.ini_options]
-addopts = "-ra"
+addopts = "-ra --strict-markers --strict-config"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# A warning the suite does not fail on is a warning nobody reads. Every
+# exception below names the dependency that emits it, so it expires visibly.
+filterwarnings = [
+  "error",
+  # starlette.testclient still imports httpx and warns about it; the fix is
+  # upstream (httpx2) and not ours to make.
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated:UserWarning",
+]
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "ASYNC"]
+# S (flake8-bandit) is the ruleset aimed at this project's threat model:
+# subprocess execution and path handling.
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "SIM", "RUF", "PT", "PTH"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert, bind test servers, and build fixture paths from literals.
+# ASYNC110/240: an async test may poll a real child process and touch the
+# filesystem synchronously; that is the thing under test, not a mistake.
+"tests/**" = ["S101", "S104", "S108", "ASYNC110", "ASYNC240"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-packages = ["subscription_gateway"]
+files = ["src", "tests"]
+mypy_path = ["src", "tests"]
+explicit_package_bases = true
 
 [tool.coverage.run]
 source = ["src/subscription_gateway"]
@@ -87,6 +106,9 @@ branch = true
 
 [tool.coverage.report]
 show_missing = true
+# Ratchet: raise this with the coverage it protects, never lower it to make a
+# red run green.
+fail_under = 85
 exclude_lines = [
   "pragma: no cover",
   "if TYPE_CHECKING:",

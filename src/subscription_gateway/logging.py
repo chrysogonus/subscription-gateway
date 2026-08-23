@@ -13,6 +13,8 @@ SENSITIVE_MARKERS = ("TOKEN", "KEY", "SECRET", "PASSWORD")
 
 
 def redact_mapping(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Mask values whose field name looks secret-bearing."""
+
     return {
         key: "***" if any(marker in key.upper() for marker in SENSITIVE_MARKERS) else value
         for key, value in values.items()
@@ -38,7 +40,9 @@ class JsonFormatter(logging.Formatter):
         ):
             if hasattr(record, field):
                 payload[field] = getattr(record, field)
-        return json.dumps(payload, separators=(",", ":"), default=str)
+        # None of the fields above is secret-bearing today. Redacting on the way
+        # out is what keeps that true when the next one is added.
+        return json.dumps(redact_mapping(payload), separators=(",", ":"), default=str)
 
 
 def configure_logging(settings: LoggingSettings) -> None:

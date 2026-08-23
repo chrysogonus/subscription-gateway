@@ -37,8 +37,16 @@ make check        # ruff check, mypy --strict, pytest — the same commands CI r
 make coverage     # pytest with a coverage report
 ```
 
-CI runs `ruff format --check`, so run `make fix` before pushing. `mypy` runs in `strict` mode and
-the codebase is clean under it; new code is expected to stay that way.
+CI runs `ruff format --check`, so run `make fix` before pushing. `mypy` runs in `strict` mode over
+both `src/` and `tests/`, and the codebase is clean under it; new code is expected to stay that way.
+
+Two things fail a run that used to only produce output:
+
+- **Warnings are errors.** `filterwarnings = ["error"]` in `pyproject.toml`. A new deprecation
+  warning fails the suite; add a narrowly scoped `ignore:` entry naming the dependency that
+  emits it, so the exception expires visibly rather than silently.
+- **Coverage has a floor** of 85% (`fail_under` under `[tool.coverage.report]`). Raise it when
+  you raise coverage; never lower it to make a red run green.
 
 Tests use mock providers and mocked process results. They must not require a provider
 installation, credentials, network access, or subscription usage — if a change can only be tested
