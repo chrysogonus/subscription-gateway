@@ -1,5 +1,10 @@
 ARG CODEX_VERSION=0.149.0
 ARG CLAUDE_CODE_VERSION=2.1.226
+ARG UV_VERSION=0.11.21
+
+# uv is a build-time tool only: it exports uv.lock to a hash-pinned requirements
+# file and is deleted before the final layer.
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
 FROM node:22-slim AS provider-clients
 
@@ -30,8 +35,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DISABLE_AUTOUPDATER=1
 
 WORKDIR /app
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
+COPY --from=uv /uv /usr/local/bin/uv
 COPY --from=provider-clients /usr/local/bin/node /usr/local/bin/node
 COPY --from=provider-clients /usr/local/lib/node_modules /usr/local/lib/node_modules
 # The claude symlink target really is claude.exe: that is the launcher the
@@ -46,7 +52,14 @@ RUN apt-get update \
         tini \
     && ln -s /usr/local/lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex \
     && ln -s /usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe /usr/local/bin/claude \
-    && python -m pip install --no-cache-dir . \
+    # Dependencies come from uv.lock -- the same resolution CI tests -- instead
+    # of a fresh resolve at build time. `--locked` fails the build on a stale
+    # lock, and the exported hashes make pip verify every download.
+    && uv export --locked --no-dev --no-emit-project --format requirements.txt \
+        -o /tmp/requirements.txt \
+    && python -m pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt \
+    && python -m pip install --no-cache-dir --no-deps . \
+    && rm /tmp/requirements.txt /usr/local/bin/uv \
     && useradd --create-home --uid "${GATEWAY_UID}" gateway \
     && mkdir -p /data /home/gateway/.codex /home/gateway/.claude /home/gateway/workspace \
     && chown -R gateway:gateway /data /home/gateway \
