@@ -118,7 +118,10 @@ typecheck: ## Type-check with mypy
 coverage: ## Run the test suite with a coverage report
 	$(RUN) $(BIN)pytest --cov
 
-check: lint typecheck test ## Run lint, typecheck, and tests
+# Uses `coverage`, not `test`: the 85% floor lives in [tool.coverage.report] and
+# only fires under --cov, so a plain pytest run would let coverage fall and still
+# report green here while CI failed.
+check: lint typecheck coverage ## Run lint, typecheck, and tests with the coverage floor
 
 ##@ Local gateway
 

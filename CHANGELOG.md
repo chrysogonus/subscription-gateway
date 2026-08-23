@@ -51,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test. `main:app` is now constructed on first attribute access.
 - `ProviderRegistry.resolve` no longer relies on an `assert` for a load-bearing
   invariant, which would be stripped under `python -O`.
+- CI now installs with `uv sync --locked` instead of `--frozen`. `--frozen` only means
+  "do not update the lock", so it installed happily from a `uv.lock` that no longer
+  matched `pyproject.toml`; a dependency added without `make lock` produced a green run.
+  Only the image build, which exports with `--locked --no-dev`, caught the drift — and
+  never for a development dependency.
+- `make check` runs `coverage` rather than `test`, so the 85% floor fails the local gate
+  too. `--cov` is not in `addopts`, so a plain `pytest` run reported green while CI failed.
 
 ## [0.1.0] - 2026-08-20
 

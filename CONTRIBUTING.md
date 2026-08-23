@@ -33,8 +33,8 @@ make precommit    # install the ruff and whitespace pre-commit hooks
 
 ```bash
 make fix          # ruff autofixes + ruff format
-make check        # ruff check, mypy --strict, pytest — the same commands CI runs
-make coverage     # pytest with a coverage report
+make check        # ruff check, mypy --strict, pytest --cov — the same gate CI runs
+make coverage     # just the test suite with a coverage report
 ```
 
 CI runs `ruff format --check`, so run `make fix` before pushing. `mypy` runs in `strict` mode over
@@ -46,7 +46,8 @@ Two things fail a run that used to only produce output:
   warning fails the suite; add a narrowly scoped `ignore:` entry naming the dependency that
   emits it, so the exception expires visibly rather than silently.
 - **Coverage has a floor** of 85% (`fail_under` under `[tool.coverage.report]`). Raise it when
-  you raise coverage; never lower it to make a red run green.
+  you raise coverage; never lower it to make a red run green. The floor only fires under
+  `--cov`, which is why `make check` runs `coverage` rather than plain `test`.
 
 Tests use mock providers and mocked process results. They must not require a provider
 installation, credentials, network access, or subscription usage — if a change can only be tested
