@@ -133,4 +133,16 @@ def create_app(
     return application
 
 
-app = create_app()
+def __getattr__(name: str) -> FastAPI:
+    """Build the ASGI app on first access, not on import.
+
+    `uvicorn subscription_gateway.main:app` still resolves. Constructing it
+    eagerly meant that merely importing this module loaded and validated the
+    configuration, so `subscription-gateway --version` crashed in any
+    environment whose config was incomplete -- the container being the one that
+    matters, since its ENV asks for a non-loopback bind with no API key yet.
+    """
+
+    if name == "app":
+        return create_app()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
