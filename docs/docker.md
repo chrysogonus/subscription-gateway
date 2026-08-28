@@ -95,7 +95,9 @@ docker compose up --build --detach
 The provider-state mounts are read-write because the official clients refresh their own sessions
 and persist conversation metadata. The gateway still never opens or parses credential files. The
 adapters use Codex's `--ignore-user-config` and Claude's `--safe-mode`, so host hooks, plugins, and
-MCP configuration are not activated by gateway requests.
+MCP configuration are not activated by gateway requests. Filesystem-agent requests additionally
+use Claude's `--restricted` mode and a file-only tool allowlist rooted at the requested container
+workspace. Codex is available for chat but not through the filesystem-agent endpoint.
 
 Codex can store authentication in an OS keyring instead of `$HOME/.codex/auth.json`. A container
 cannot access the host keyring. If `docker compose exec gateway codex login status` is not ready,

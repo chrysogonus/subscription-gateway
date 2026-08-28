@@ -57,6 +57,10 @@ before pointing anything at it.
 - Codex CLI, authenticated with `codex login`, for `codex/*` models;
 - Claude Code, authenticated with `claude auth login`, for `claude-code/*` models.
 
+Filesystem-agent requests require Claude Code 2.1.248 or newer; the Docker image pins a compatible
+release. Codex remains available for chat, but is intentionally not exposed through the agent
+endpoint because its CLI sandbox does not confine read access to the requested workspace.
+
 The server starts even if neither provider is installed. `/health` remains healthy, `/ready`
 returns 503, and `/v1/models` returns an empty list in that situation.
 
@@ -91,7 +95,8 @@ make up-webui    # gateway and OpenWebUI, on http://127.0.0.1:3001
 
 The default bind is loopback-only, and the gateway refuses a non-loopback address unless
 `server.allow_remote` **and** a local API key are both configured. Docker deployments always
-require `Authorization: Bearer <key>`, defaulting to `local`.
+require `Authorization: Bearer <key>`, defaulting to `local`. Filesystem-agent requests require a
+configured key even on loopback-native deployments.
 
 ## Models
 

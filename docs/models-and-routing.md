@@ -71,11 +71,13 @@ though they select the same model.
 - A model the caller named explicitly never falls back when the runtime rejects the model itself:
   no other provider can supply that model, and answering from a different one would misattribute
   the reply. `subscription/auto` still falls back, because the caller named no model.
-- Existing sessions never cross providers.
+- Existing sessions never cross providers or API types, and cannot change agent directories or
+  permissions. Requests continuing one session execute serially.
 - Write-capable agent operations do not fall back by default.
 - Provider semaphores queue excess work; defaults are two Codex and one Claude request.
 
 Unavailable providers are not advertised unless their `advertise_unavailable` setting is true.
 This setting affects discovery only; an actual request still returns a normalized error.
 
-Check the `X-Gateway-Provider` and `X-Gateway-Model` response headers to see what actually ran.
+Check the `X-Gateway-Provider` and `X-Gateway-Model` headers on non-streaming responses to see what
+actually ran. Streaming responses cannot declare those before a possible fallback is selected.

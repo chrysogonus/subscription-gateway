@@ -81,7 +81,9 @@ class ClaudeProvider(Provider):
     def _working_directory(self, options: dict[str, Any] | None = None) -> Path:
         requested = (options or {}).get("cwd")
         path = Path(requested).expanduser() if requested else self.settings.working_directory
-        return path if path.is_dir() else Path.home()
+        if not path.is_dir():
+            raise NotADirectoryError(f"Claude working directory is unavailable: {path}")
+        return path
 
     def build_command(
         self,
@@ -101,6 +103,11 @@ class ClaudeProvider(Provider):
                 f"Model name '{model}' is not a valid provider model.",
                 code="invalid_model_name",
             )
+        if permissions not in {"read-only", "workspace-write"}:
+            raise invalid_request(
+                "Claude permissions must be read-only or workspace-write.",
+                code="invalid_permissions",
+            )
         command = [
             self._executable,
             "--print",
@@ -113,10 +120,31 @@ class ClaudeProvider(Provider):
         if session_id and not session_id.startswith("pending:"):
             command.extend(["--resume", session_id])
         if agent_task:
+            command.extend(["--restricted", "--strict-mcp-config"])
             if permissions == "workspace-write":
-                command.extend(["--permission-mode", "acceptEdits"])
+                tools = "Read,Glob,Grep,Edit,Write"
+                command.extend(
+                    [
+                        "--tools",
+                        tools,
+                        "--allowedTools",
+                        tools,
+                        "--permission-mode",
+                        "acceptEdits",
+                    ]
+                )
             else:
-                command.extend(["--allowedTools", "Read,Glob,Grep", "--permission-mode", "plan"])
+                tools = "Read,Glob,Grep"
+                command.extend(
+                    [
+                        "--tools",
+                        tools,
+                        "--allowedTools",
+                        tools,
+                        "--permission-mode",
+                        "plan",
+                    ]
+                )
         else:
             command.extend(["--tools", "", "--permission-mode", "plan"])
         command.append(prompt)

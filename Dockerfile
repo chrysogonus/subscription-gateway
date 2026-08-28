@@ -1,5 +1,5 @@
-ARG CODEX_VERSION=0.149.0
-ARG CLAUDE_CODE_VERSION=2.1.226
+ARG CODEX_VERSION=0.150.1
+ARG CLAUDE_CODE_VERSION=2.1.251
 ARG UV_VERSION=0.11.21
 
 # uv is a build-time tool only: it exports uv.lock to a hash-pinned requirements
@@ -35,7 +35,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DISABLE_AUTOUPDATER=1
 
 WORKDIR /app
-COPY pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
 COPY --from=uv /uv /usr/local/bin/uv
 COPY --from=provider-clients /usr/local/bin/node /usr/local/bin/node

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -84,7 +85,42 @@ def test_codex_command_is_argument_array_and_resume_aware() -> None:
     assert initial[initial.index("--sandbox") + 1] == "read-only"
     assert resumed[1:3] == ["exec", "resume"]
     assert "--ignore-user-config" in resumed
+    assert 'sandbox_mode="workspace-write"' in resumed
     assert "thread-123" in resumed
+
+
+def test_codex_is_not_exposed_as_a_filesystem_agent() -> None:
+    provider = CodexProvider(CodexSettings(command="/bin/echo"))
+    assert provider.capabilities.filesystem_agent is False
+
+
+def test_codex_invalid_working_directory_does_not_fall_back(tmp_path: Path) -> None:
+    provider = CodexProvider(CodexSettings(command="/bin/echo"))
+    missing = tmp_path / "missing"
+    with pytest.raises(NotADirectoryError, match="working directory is unavailable"):
+        provider._working_directory({"cwd": str(missing)})
+
+
+@pytest.mark.asyncio
+async def test_codex_invalid_working_directory_is_normalized(tmp_path: Path) -> None:
+    provider = CodexProvider(
+        CodexSettings(command="/bin/echo", working_directory=tmp_path / "missing")
+    )
+    with pytest.raises(ProviderError) as caught:
+        await provider.send(None, "gpt-5.6-sol", [{"role": "user", "content": "hi"}], {})
+    assert caught.value.code == "provider_unavailable"
+
+
+def test_codex_command_rejects_invalid_permissions() -> None:
+    provider = CodexProvider(CodexSettings(command="/bin/echo"))
+    with pytest.raises(GatewayError) as caught:
+        provider.build_command(
+            session_id="thread-123",
+            model="gpt-5.6-sol",
+            prompt="hi",
+            permissions='read-only"; sandbox_mode="danger-full-access',
+        )
+    assert caught.value.code == "invalid_permissions"
 
 
 def test_codex_command_rejects_flag_like_model() -> None:

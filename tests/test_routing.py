@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -231,13 +232,15 @@ def test_explicit_default_selects_the_auto_target(gateway_config: GatewayConfig)
 def test_write_agent_does_not_fallback_without_double_opt_in(
     gateway_config: GatewayConfig, tmp_path: Path
 ) -> None:
+    data = gateway_config.model_dump(mode="python")
+    data["server"]["api_key"] = "test-key"
+    config = GatewayConfig.model_validate(data)
     codex = FakeProvider("codex", error=temporary_error("codex"))
     claude = FakeProvider("claude", text="fallback")
-    with TestClient(
-        create_app(gateway_config, providers={"codex": codex, "claude": claude})
-    ) as client:
+    with TestClient(create_app(config, providers={"codex": codex, "claude": claude})) as client:
         response = client.post(
             "/v1/agents/run",
+            headers={"Authorization": "Bearer test-key"},
             json={
                 "model": "codex/gpt-5.6-sol",
                 "prompt": "edit a file",
@@ -248,3 +251,34 @@ def test_write_agent_does_not_fallback_without_double_opt_in(
         )
     assert response.status_code == 503
     assert not claude.calls
+
+
+@pytest.mark.asyncio
+async def test_concurrent_requests_for_one_session_are_serialized(
+    gateway_config: GatewayConfig,
+) -> None:
+    codex = FakeProvider("codex", delay=0.05)
+    app = create_app(gateway_config, providers={"codex": codex})
+    await app.state.storage.initialize()
+    try:
+        first = await app.state.engine.complete(
+            model="codex/gpt-5.6-sol",
+            messages=[{"role": "user", "content": "start"}],
+            options={},
+            gateway_session_id=None,
+        )
+
+        async def resume() -> Any:
+            return await app.state.engine.complete(
+                model="codex/gpt-5.6-sol",
+                messages=[{"role": "user", "content": "continue"}],
+                options={},
+                gateway_session_id=first.gateway_session_id,
+            )
+
+        responses = await asyncio.gather(resume(), resume())
+    finally:
+        await app.state.storage.close()
+
+    assert len(responses) == 2
+    assert codex.max_active == 1

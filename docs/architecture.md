@@ -44,6 +44,11 @@ stdout and stderr separate, and resumes returned session IDs. Subprocess creatio
 arrays with no shell. The adapter is isolated behind `Provider`, so a future Claude Agent SDK
 implementation can replace it without changing routing or HTTP code.
 
+Filesystem-agent execution is intentionally narrower than chat. Claude Code runs in restricted
+mode with only its built-in file tools, while Codex is not exposed as a filesystem agent because
+its current sandbox cannot enforce the configured read root. Session records bind continuations
+to their original API type, directory, and permissions.
+
 ## Platform support
 
 Linux is the primary target. The implementation uses `pathlib`, `shutil.which`, argument-array

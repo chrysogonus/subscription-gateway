@@ -161,6 +161,7 @@ class StorageSettings(BaseModel):
             Path.home() / ".local" / "share" / "subscription-llm-gateway" / "gateway.db"
         )
     )
+    session_retention_days: int | None = Field(default=30, ge=1, le=3650)
 
     @field_validator("sqlite_path", mode="before")
     @classmethod
@@ -201,6 +202,7 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "GATEWAY_API_KEY": ("server", "api_key"),
     "GATEWAY_ALLOW_REMOTE": ("server", "allow_remote"),
     "GATEWAY_SQLITE_PATH": ("storage", "sqlite_path"),
+    "GATEWAY_SESSION_RETENTION_DAYS": ("storage", "session_retention_days"),
     "GATEWAY_LOG_LEVEL": ("logging", "level"),
     "GATEWAY_DEBUG_PROMPTS": ("logging", "debug_prompts"),
     "GATEWAY_CODEX_COMMAND": ("providers", "codex", "command"),

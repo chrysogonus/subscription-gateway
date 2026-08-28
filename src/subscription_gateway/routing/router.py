@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 from subscription_gateway.config import GatewayConfig
 from subscription_gateway.errors import (
@@ -59,6 +61,68 @@ class GatewayEngine:
         allow_fallback: bool | None = None,
         agent_task: bool = False,
     ) -> GatewayResult:
+        if gateway_session_id is not None:
+            async with self.sessions.serialized(gateway_session_id):
+                return await self._complete(
+                    model=model,
+                    messages=messages,
+                    options=options,
+                    gateway_session_id=gateway_session_id,
+                    allow_fallback=allow_fallback,
+                    agent_task=agent_task,
+                )
+        return await self._complete(
+            model=model,
+            messages=messages,
+            options=options,
+            gateway_session_id=None,
+            allow_fallback=allow_fallback,
+            agent_task=agent_task,
+        )
+
+    async def _complete(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        options: dict[str, Any],
+        gateway_session_id: str | None,
+        allow_fallback: bool | None,
+        agent_task: bool,
+    ) -> GatewayResult:
+        session_kind: Literal["chat", "agent"] = "agent" if agent_task else "chat"
+        working_directory: str | None = None
+        if agent_task:
+            raw_cwd = options.get("cwd")
+            if not isinstance(raw_cwd, str) or not raw_cwd:
+                raise invalid_request(
+                    "Agent tasks require an absolute working directory.",
+                    code="invalid_agent_working_directory",
+                )
+            raw_path = Path(raw_cwd)
+            if not raw_path.is_absolute():
+                raise invalid_request(
+                    "Agent tasks require an absolute working directory.",
+                    code="invalid_agent_working_directory",
+                )
+            try:
+                cwd = await asyncio.to_thread(raw_path.resolve, strict=True)
+            except (OSError, RuntimeError) as exc:
+                raise invalid_request(
+                    "Agent working directory does not exist or cannot be resolved.",
+                    code="invalid_agent_working_directory",
+                ) from exc
+            if not await asyncio.to_thread(cwd.is_dir):
+                raise invalid_request(
+                    "Agent tasks require an absolute working directory.",
+                    code="invalid_agent_working_directory",
+                )
+            working_directory = str(cwd)
+        permissions: Literal["read-only", "workspace-write"] = (
+            "workspace-write"
+            if agent_task and options.get("permissions") == "workspace-write"
+            else "read-only"
+        )
         existing, routes = await self._routes(
             model=model,
             gateway_session_id=gateway_session_id,
@@ -68,6 +132,9 @@ class GatewayEngine:
                 and options.get("permissions") == "workspace-write"
                 and not options.get("allow_write_fallback", False)
             ),
+            session_kind=session_kind,
+            working_directory=working_directory,
+            permissions=permissions,
         )
         last_error: GatewayError | None = None
         if self.config.logging.debug_prompts:
@@ -84,7 +151,15 @@ class GatewayEngine:
                         messages,
                         {**options, "agent_task": agent_task},
                     )
-                session = await self._persist_success(existing, model, route, response)
+                session = await self._persist_success(
+                    existing,
+                    model,
+                    route,
+                    response,
+                    session_kind=session_kind,
+                    working_directory=working_directory,
+                    permissions=permissions,
+                )
                 duration = time.monotonic() - started
                 logger.info(
                     "provider request completed request_id=%s provider=%s model=%s session_id=%s "
@@ -126,7 +201,7 @@ class GatewayEngine:
         gateway_session_id: str | None,
         allow_fallback: bool | None = None,
     ) -> tuple[str, AsyncIterator[ProviderEvent]]:
-        existing, routes = await self._routes(
+        existing, initial_routes = await self._routes(
             model=model,
             gateway_session_id=gateway_session_id,
             allow_fallback=allow_fallback,
@@ -134,67 +209,81 @@ class GatewayEngine:
         )
         created = existing is None
         session = existing or await self.sessions.create(
-            provider=routes[0].provider.name,
+            provider=initial_routes[0].provider.name,
             model=model,
-            provider_model=routes[0].provider_model,
+            provider_model=initial_routes[0].provider_model,
         )
 
         async def generate() -> AsyncIterator[ProviderEvent]:
             nonlocal session
-            emitted = False
-            last_error: GatewayError | None = None
-            started = time.monotonic()
-            try:
-                for route in routes:
-                    try:
-                        self._validate_capability(route, False)
-                        await self._require_available(route)
-                        if route.provider.name != session.provider:
-                            session = await self.sessions.update(
-                                session,
-                                provider=route.provider.name,
-                                provider_model=route.provider_model,
-                                clear_provider_session=True,
+            async with self.sessions.serialized(session.gateway_session_id):
+                routes = initial_routes
+                if not created:
+                    locked_session, routes = await self._routes(
+                        model=model,
+                        gateway_session_id=session.gateway_session_id,
+                        allow_fallback=allow_fallback,
+                        side_effects=False,
+                    )
+                    if locked_session is None:  # pragma: no cover - defensive invariant
+                        raise RuntimeError("existing session disappeared while locked")
+                    session = locked_session
+                emitted = False
+                last_error: GatewayError | None = None
+                started = time.monotonic()
+                try:
+                    for route in routes:
+                        try:
+                            self._validate_capability(route, False)
+                            await self._require_available(route)
+                            if route.provider.name != session.provider:
+                                session = await self.sessions.update(
+                                    session,
+                                    provider=route.provider.name,
+                                    provider_model=route.provider_model,
+                                    clear_provider_session=True,
+                                )
+                            async with self.scheduler.slot(route.provider.name):
+                                async for event in route.provider.stream(
+                                    session.provider_session_id,
+                                    route.provider_model,
+                                    messages,
+                                    options,
+                                ):
+                                    if event.session_id:
+                                        session = await self.sessions.update(
+                                            session, provider_session_id=event.session_id
+                                        )
+                                    if event.response is not None:
+                                        session = await self.sessions.update(
+                                            session,
+                                            provider_session_id=(
+                                                event.response.provider_session_id
+                                            ),
+                                        )
+                                    if event.type == "delta" and event.text:
+                                        emitted = True
+                                    yield event
+                            logger.info(
+                                "provider stream completed request_id=%s provider=%s model=%s "
+                                "session_id=%s duration_ms=%.1f status=completed",
+                                options.get("request_id", "-"),
+                                route.provider.name,
+                                route.public_model,
+                                session.gateway_session_id,
+                                (time.monotonic() - started) * 1000,
                             )
-                        async with self.scheduler.slot(route.provider.name):
-                            async for event in route.provider.stream(
-                                session.provider_session_id,
-                                route.provider_model,
-                                messages,
-                                options,
-                            ):
-                                if event.session_id:
-                                    session = await self.sessions.update(
-                                        session, provider_session_id=event.session_id
-                                    )
-                                if event.response is not None:
-                                    session = await self.sessions.update(
-                                        session,
-                                        provider_session_id=event.response.provider_session_id,
-                                    )
-                                if event.type == "delta" and event.text:
-                                    emitted = True
-                                yield event
-                        logger.info(
-                            "provider stream completed request_id=%s provider=%s model=%s "
-                            "session_id=%s duration_ms=%.1f status=completed",
-                            options.get("request_id", "-"),
-                            route.provider.name,
-                            route.public_model,
-                            session.gateway_session_id,
-                            (time.monotonic() - started) * 1000,
-                        )
-                        return
-                    except ProviderError as exc:
-                        last_error = exc
-                        if emitted or existing is not None or not self._is_retryable(route, exc):
-                            raise
-                if last_error is not None:
-                    raise last_error
-            except BaseException:
-                if created and not emitted:
-                    await self.sessions.storage.delete(session.gateway_session_id)
-                raise
+                            return
+                        except ProviderError as exc:
+                            last_error = exc
+                            if emitted or not created or not self._is_retryable(route, exc):
+                                raise
+                    if last_error is not None:
+                        raise last_error
+                except BaseException:
+                    if created and not emitted:
+                        await self.sessions.storage.delete(session.gateway_session_id)
+                    raise
 
         return session.gateway_session_id, generate()
 
@@ -205,9 +294,18 @@ class GatewayEngine:
         gateway_session_id: str | None,
         allow_fallback: bool | None,
         side_effects: bool,
+        session_kind: Literal["chat", "agent"] = "chat",
+        working_directory: str | None = None,
+        permissions: Literal["read-only", "workspace-write"] = "read-only",
     ) -> tuple[ProviderSession | None, list[Route]]:
         if gateway_session_id:
-            session = await self.sessions.require_compatible(gateway_session_id, model)
+            session = await self.sessions.require_compatible(
+                gateway_session_id,
+                model,
+                session_kind=session_kind,
+                working_directory=working_directory,
+                permissions=permissions,
+            )
             return session, [
                 self.policy.pinned(session.provider, session.model, session.provider_model)
             ]
@@ -216,6 +314,7 @@ class GatewayEngine:
             model,
             allow_fallback=fallback,
             side_effects=side_effects,
+            filesystem_agent=session_kind == "agent",
         )
 
     async def _persist_success(
@@ -224,6 +323,10 @@ class GatewayEngine:
         requested_model: str,
         route: Route,
         response: ProviderResponse,
+        *,
+        session_kind: Literal["chat", "agent"],
+        working_directory: str | None,
+        permissions: Literal["read-only", "workspace-write"],
     ) -> ProviderSession:
         if existing is not None:
             return await self.sessions.update(
@@ -234,6 +337,9 @@ class GatewayEngine:
             model=requested_model,
             provider_model=route.provider_model,
             provider_session_id=response.provider_session_id,
+            session_kind=session_kind,
+            working_directory=working_directory,
+            permissions=permissions,
         )
 
     @staticmethod

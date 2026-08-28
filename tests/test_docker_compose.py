@@ -54,3 +54,17 @@ def test_makefile_selects_the_declared_profile() -> None:
     selections = set(re.findall(r"--profile (\S+)", makefile))
 
     assert selections == {WEBUI_PROFILE}
+
+
+def test_docker_package_includes_its_declared_license() -> None:
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "COPY pyproject.toml uv.lock README.md LICENSE ./" in dockerfile
+
+
+def test_compose_cli_versions_match_the_dockerfile_defaults() -> None:
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    for variable in ("CODEX_VERSION", "CLAUDE_CODE_VERSION"):
+        version = re.search(rf"^ARG {variable}=([^\s]+)$", dockerfile, re.MULTILINE)
+        assert version is not None
+        assert f"${{{variable}:-{version.group(1)}}}" in compose

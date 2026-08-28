@@ -10,6 +10,7 @@ from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, ConfigDict
 
 from subscription_gateway.api.chat import requested_session
+from subscription_gateway.config import secret_value
 from subscription_gateway.errors import agent_permission_error
 
 router = APIRouter(prefix="/v1")
@@ -52,6 +53,10 @@ async def run_agent(
     response: Response,
 ) -> dict[str, Any]:
     config = request.app.state.config
+    if not secret_value(config.server.api_key):
+        raise agent_permission_error(
+            "Filesystem agent requests require a configured local gateway API key."
+        )
     cwd = validate_agent_cwd(
         body.cwd,
         config.agent.allowed_directories,

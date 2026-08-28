@@ -76,6 +76,12 @@ For security issues, do not open a public issue — see [SECURITY.md](SECURITY.m
 
 Maintainer steps:
 
+For the first public release, change repository visibility only after enabling Dependabot
+vulnerability alerts, secret scanning and push protection, Discussions (used by the repository's
+community contact), and a `main` branch ruleset that requires the CI checks and blocks force
+pushes. Recheck those settings after the visibility change because plan-dependent controls may
+not be available while the repository is private.
+
 1. Bump `version` in `pyproject.toml`. It is the single source of truth; the package and the
    FastAPI app read it from installed metadata.
 2. Move the `## [Unreleased]` entries into a new `## [X.Y.Z] - YYYY-MM-DD` section in

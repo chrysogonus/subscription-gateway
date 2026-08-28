@@ -55,6 +55,8 @@ agent:
 
 storage:
   sqlite_path: ~/.local/share/subscription-llm-gateway/gateway.db
+  # Inactive session metadata is removed automatically. Set null to retain it indefinitely.
+  session_retention_days: 30
 
 logging:
   level: INFO

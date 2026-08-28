@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -85,7 +86,55 @@ def test_claude_command_resumes_session() -> None:
         agent_task=True,
     )
     assert command[command.index("--resume") + 1] == "42c5f7a2-98bf-4f0a-b86f-53ad6d42e059"
+    assert "--restricted" in command
+    assert "--strict-mcp-config" in command
+    assert command[command.index("--tools") + 1] == "Read,Glob,Grep"
     assert command[command.index("--allowedTools") + 1] == "Read,Glob,Grep"
+
+
+def test_claude_write_agent_is_restricted_to_file_tools() -> None:
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+    command = provider.build_command(
+        session_id=None,
+        model="opus",
+        prompt="edit",
+        permissions="workspace-write",
+        agent_task=True,
+    )
+    assert "--restricted" in command
+    assert "--strict-mcp-config" in command
+    assert command[command.index("--tools") + 1] == "Read,Glob,Grep,Edit,Write"
+    assert "Bash" not in command
+
+
+def test_claude_invalid_working_directory_does_not_fall_back(tmp_path: Path) -> None:
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+    missing = tmp_path / "missing"
+    with pytest.raises(NotADirectoryError, match="working directory is unavailable"):
+        provider._working_directory({"cwd": str(missing)})
+
+
+@pytest.mark.asyncio
+async def test_claude_invalid_working_directory_is_normalized(tmp_path: Path) -> None:
+    provider = ClaudeProvider(
+        ClaudeSettings(command="/bin/echo", working_directory=tmp_path / "missing")
+    )
+    with pytest.raises(ProviderError) as caught:
+        await provider.send(None, "opus", [{"role": "user", "content": "hi"}], {})
+    assert caught.value.code == "provider_unavailable"
+
+
+def test_claude_command_rejects_invalid_permissions() -> None:
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+    with pytest.raises(GatewayError) as caught:
+        provider.build_command(
+            session_id=None,
+            model="opus",
+            prompt="hi",
+            permissions="bypassPermissions",
+            agent_task=True,
+        )
+    assert caught.value.code == "invalid_permissions"
 
 
 def test_claude_command_rejects_flag_like_model() -> None:

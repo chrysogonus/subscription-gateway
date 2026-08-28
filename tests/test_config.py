@@ -31,6 +31,11 @@ def test_yaml_and_environment_overrides(tmp_path: Path) -> None:
     assert config.storage.sqlite_path == Path.home() / "x.db"
 
 
+def test_session_retention_environment_override() -> None:
+    config = load_config(environ={"GATEWAY_SESSION_RETENTION_DAYS": "90"})
+    assert config.storage.session_retention_days == 90
+
+
 def test_remote_bind_requires_explicit_flag_and_key() -> None:
     with pytest.raises(ValidationError):
         GatewayConfig.model_validate({"server": {"host": "0.0.0.0"}})
@@ -76,6 +81,7 @@ def test_config_example_matches_built_in_defaults() -> None:
     assert example.providers.claude.models == defaults.providers.claude.models
     assert example.providers.codex.default_alias == defaults.providers.codex.default_alias
     assert example.providers.claude.default_alias == defaults.providers.claude.default_alias
+    assert example.storage.session_retention_days == defaults.storage.session_retention_days
 
 
 def test_more_than_one_default_is_rejected() -> None:

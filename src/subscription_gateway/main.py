@@ -37,7 +37,10 @@ def create_app(
     gateway_config = config or load_config()
     configure_logging(gateway_config.logging)
     storage = SQLiteSessionStorage(gateway_config.storage.sqlite_path)
-    sessions = SessionManager(storage)
+    sessions = SessionManager(
+        storage,
+        session_retention_days=gateway_config.storage.session_retention_days,
+    )
     registry = ProviderRegistry(gateway_config, providers)
     limits = {
         name: getattr(gateway_config.providers, name).max_concurrent
@@ -51,6 +54,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await storage.initialize()
+        await sessions.cleanup_expired(force=True)
         yield
         await storage.close()
 

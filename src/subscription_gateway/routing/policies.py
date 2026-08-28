@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 
 from subscription_gateway.config import RoutingSettings
-from subscription_gateway.errors import model_not_available
+from subscription_gateway.errors import invalid_request, model_not_available
 from subscription_gateway.model_names import AUTO_MODEL
 from subscription_gateway.providers.base import Provider
 from subscription_gateway.providers.registry import ProviderRegistry
@@ -33,9 +33,19 @@ class RoutingPolicy:
         *,
         allow_fallback: bool,
         side_effects: bool,
+        filesystem_agent: bool = False,
     ) -> list[Route]:
         if requested_model == AUTO_MODEL:
             candidates = self._ordered_defaults()
+            if filesystem_agent:
+                candidates = [
+                    route for route in candidates if route.provider.capabilities.filesystem_agent
+                ]
+                if not candidates:
+                    raise invalid_request(
+                        "No configured provider supports filesystem agent tasks.",
+                        code="unsupported_provider_capability",
+                    )
             if not candidates:
                 raise model_not_available(requested_model)
             return candidates if allow_fallback and not side_effects else candidates[:1]
@@ -43,6 +53,11 @@ class RoutingPolicy:
         resolved = self.registry.resolve(requested_model)
         if resolved is None:
             raise model_not_available(requested_model)
+        if filesystem_agent and not resolved.provider.capabilities.filesystem_agent:
+            raise invalid_request(
+                f"Provider '{resolved.provider.name}' does not support filesystem agent tasks.",
+                code="unsupported_provider_capability",
+            )
         if not resolved.catalogued:
             logger.debug(
                 "passthrough model provider=%s model=%s",
@@ -61,6 +76,7 @@ class RoutingPolicy:
             route
             for route in self._ordered_defaults()
             if route.provider.name != resolved.provider.name
+            and (not filesystem_agent or route.provider.capabilities.filesystem_agent)
         ]
         return [direct, *alternatives]
 

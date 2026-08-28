@@ -26,21 +26,30 @@ Some behavior that looks alarming is intentional and documented. It is not a vul
 - **Loopback binding by default.** The gateway refuses to bind a non-loopback address unless both
   `server.allow_remote: true` and a local API key are configured. Deliberately configuring a
   remote bind is a supported-but-discouraged choice; the resulting exposure is the operator's.
-- **No API key by default when running natively.** Without `GATEWAY_API_KEY`, localhost requests
-  are accepted. The Docker Compose stack always sets a key (`local` by default).
+- **No API key by default for native chat.** Without `GATEWAY_API_KEY`, localhost chat requests
+  are accepted. Filesystem-agent requests remain disabled until a key is configured. The Docker
+  Compose stack always sets a key (`local` by default).
 - **Provider state is mounted read-write in Docker.** The official CLIs refresh their own
   sessions, so their state directories must be writable. The gateway itself never opens or parses
   those files.
 - **Subprocess execution of the provider CLIs** is the entire point of the project. Model names
   are validated against a strict character allowlist before any process is spawned, and
   subprocesses are created from argument arrays with no shell.
-- **Agent filesystem access** is bounded by `agent.allowed_directories` with symlink-escape
-  checks. Write-capable fallback requires two separate opt-ins.
+- **Agent filesystem access** is available only through Claude Code's restricted mode. The
+  resolved working directory must be under `agent.allowed_directories`; the runtime is limited to
+  built-in file tools rooted there, and command execution is not exposed. Codex chat remains
+  supported, but Codex is not exposed through the filesystem-agent endpoint because its sandbox
+  does not provide the required read boundary. Write-capable fallback requires two separate
+  opt-ins.
 
 Reports that *are* in scope include: model-name or path validation that can be bypassed, command
 or argument injection into a provider CLI, sandbox escape from `POST /v1/agents/run`, credentials
 or secrets appearing in logs or responses, session data leaking across gateway sessions, and
 authentication bypass when `GATEWAY_API_KEY` is set.
+
+Gateway sessions record their API type, resolved working directory, and permission level. Those
+attributes cannot change on continuation, and requests for the same session are serialized so
+provider thread state cannot race. Inactive metadata is deleted after 30 days by default.
 
 ## What this project never does
 

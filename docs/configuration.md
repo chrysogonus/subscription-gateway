@@ -66,6 +66,7 @@ agent:
 
 storage:
   sqlite_path: ~/.local/share/subscription-llm-gateway/gateway.db
+  session_retention_days: 30
 
 logging:
   level: INFO
@@ -81,8 +82,11 @@ Notes:
 - `default: true` marks the model `subscription/auto` picks for that provider.
 - Claude tier aliases (`opus`, `sonnet`, `haiku`, `fable`) always resolve to the newest model of
   that tier, so they do not need a config change when a new one ships.
-- `agent.allowed_directories` bounds every `POST /v1/agents/run` request. See
+- `agent.allowed_directories` selects the roots accepted by `POST /v1/agents/run`; Claude's
+  restricted mode enforces the resolved request directory as its file-access boundary. See
   [the agent endpoint](api.md#agent-endpoint).
+- `storage.session_retention_days` deletes inactive session metadata after that many days. Set it
+  to `null` in YAML to retain sessions indefinitely.
 
 ## Environment overrides
 
@@ -95,6 +99,7 @@ Supported overrides:
 | `GATEWAY_PORT` | Bind port |
 | `GATEWAY_API_KEY` | Local gateway token (see below) |
 | `GATEWAY_SQLITE_PATH` | Session metadata database path |
+| `GATEWAY_SESSION_RETENTION_DAYS` | Days to retain inactive session metadata |
 | `GATEWAY_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GATEWAY_DEBUG_PROMPTS` | Log prompt content — off by default |
 | `GATEWAY_CODEX_COMMAND` | Path or name of the Codex executable |
@@ -119,8 +124,8 @@ subscription-gateway serve
 ```
 
 Clients then send `Authorization: Bearer local-secret`. This token protects the gateway only and
-is never used for Codex or Claude authentication. Without a configured token, localhost requests
-are accepted.
+is never used for Codex or Claude authentication. Without a configured token, localhost chat
+requests are accepted, but `/v1/agents/run` is disabled.
 
 Docker deployments always have a token. Compose sets `GATEWAY_API_KEY: ${GATEWAY_API_KEY:-local}`,
 so the key is `local` unless `.env` or the environment overrides it, and requests without the

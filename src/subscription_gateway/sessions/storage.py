@@ -17,10 +17,24 @@ CREATE TABLE IF NOT EXISTS provider_sessions (
     provider_session_id TEXT,
     model TEXT NOT NULL,
     provider_model TEXT NOT NULL,
+    session_kind TEXT NOT NULL DEFAULT 'chat',
+    working_directory TEXT,
+    permissions TEXT NOT NULL DEFAULT 'read-only',
     created_at TEXT NOT NULL,
     last_used_at TEXT NOT NULL
 )
 """
+
+INDEX_SCHEMA = """
+CREATE INDEX IF NOT EXISTS provider_sessions_last_used_at
+ON provider_sessions(last_used_at)
+"""
+
+MIGRATION_COLUMNS = {
+    "session_kind": "TEXT NOT NULL DEFAULT 'chat'",
+    "working_directory": "TEXT",
+    "permissions": "TEXT NOT NULL DEFAULT 'read-only'",
+}
 
 
 class SQLiteSessionStorage:
@@ -39,7 +53,21 @@ class SQLiteSessionStorage:
                 )
                 self._connection.row_factory = sqlite3.Row
                 await asyncio.to_thread(self._connection.execute, SCHEMA)
+                await self._migrate(self._connection)
+                await asyncio.to_thread(self._connection.execute, INDEX_SCHEMA)
                 await asyncio.to_thread(self._connection.commit)
+
+    @staticmethod
+    async def _migrate(connection: sqlite3.Connection) -> None:
+        cursor = await asyncio.to_thread(connection.execute, "PRAGMA table_info(provider_sessions)")
+        rows = await asyncio.to_thread(cursor.fetchall)
+        existing = {str(row[1]) for row in rows}
+        for name, declaration in MIGRATION_COLUMNS.items():
+            if name not in existing:
+                await asyncio.to_thread(
+                    connection.execute,
+                    f"ALTER TABLE provider_sessions ADD COLUMN {name} {declaration}",
+                )
 
     async def close(self) -> None:
         async with self._lock:
@@ -59,6 +87,9 @@ class SQLiteSessionStorage:
             session.provider_session_id,
             session.model,
             session.provider_model,
+            session.session_kind,
+            session.working_directory,
+            session.permissions,
             session.created_at.isoformat(),
             session.last_used_at.isoformat(),
         )
@@ -69,18 +100,33 @@ class SQLiteSessionStorage:
                 """
                 INSERT INTO provider_sessions (
                     gateway_session_id, provider, provider_session_id, model,
-                    provider_model, created_at, last_used_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    provider_model, session_kind, working_directory, permissions,
+                    created_at, last_used_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(gateway_session_id) DO UPDATE SET
                     provider=excluded.provider,
                     provider_session_id=excluded.provider_session_id,
                     model=excluded.model,
                     provider_model=excluded.provider_model,
+                    session_kind=excluded.session_kind,
+                    working_directory=excluded.working_directory,
+                    permissions=excluded.permissions,
                     last_used_at=excluded.last_used_at
                 """,
                 values,
             )
             await asyncio.to_thread(connection.commit)
+
+    async def delete_older_than(self, cutoff: datetime) -> int:
+        async with self._lock:
+            connection = self._connection_or_raise()
+            cursor = await asyncio.to_thread(
+                connection.execute,
+                "DELETE FROM provider_sessions WHERE last_used_at < ?",
+                (cutoff.isoformat(),),
+            )
+            await asyncio.to_thread(connection.commit)
+        return max(cursor.rowcount, 0)
 
     async def get(self, gateway_session_id: str) -> ProviderSession | None:
         async with self._lock:

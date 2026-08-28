@@ -7,8 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-28
+
 ### Added
 
+- OpenAI-compatible HTTP gateway on `http://127.0.0.1:11435/v1`, backed by the
+  user's already-authenticated Codex and Claude Code CLIs.
+- `POST /v1/chat/completions` with coarse SSE streaming, `POST /v1/responses`
+  (documented subset), `POST /v1/agents/run`, `GET /v1/models`, `/health`, `/ready`.
+- Catalogued and passthrough model names with strict validation before any
+  subprocess spawn; `subscription/auto` routing alias with provider fallback.
+- Session continuation through the `X-Gateway-Session` header, backed by SQLite
+  metadata only — never provider credentials.
+- Per-provider concurrency limits, normalized error taxonomy, secret-redacting logging.
+- `subscription-gateway` CLI with `serve`, `status`, and `doctor`.
+- Docker image and Compose stack with an optional OpenWebUI service behind the
+  `webui` profile, loopback-only port publishing, and a non-root container.
 - MIT `LICENSE` file, matching the license already declared in package metadata.
 - Community health files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`,
   issue and pull request templates, and `CODEOWNERS`.
@@ -24,7 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OCI image labels on the Docker image.
 - Tests for the `subscription-gateway` CLI, the subprocess reaping guarantees in
   `providers/process.py`, log formatting and redaction, and the `/v1/responses`
-  streaming path. Coverage rose from 75% to 87%.
+  streaming path. Coverage rose from 75% to over 87%.
+- Automatic cleanup of inactive session metadata, configurable with
+  `storage.session_retention_days` and defaulting to 30 days.
 
 ### Changed
 
@@ -41,6 +57,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Package metadata gained `keywords`, `classifiers`, and `[project.urls]`, and the
   license is declared as an SPDX expression.
 - The README is now a landing page; deep reference material moved to `docs/`.
+- Docker now bundles Codex 0.150.1 and Claude Code 2.1.251, and includes the MIT
+  license in the image's installed package metadata.
+- GitHub Actions dependencies are pinned to full commit SHAs.
+- Streaming documentation now distinguishes headers available before provider fallback
+  from those available only on non-streaming responses.
+
+### Security
+
+- Filesystem-agent requests now require a configured gateway API key, including on
+  loopback-native deployments.
+- Claude filesystem agents run with `--restricted` and a file-only tool allowlist;
+  command execution is not exposed. Codex remains available for chat but is no longer
+  exposed through the agent endpoint because its CLI cannot enforce the configured
+  read boundary.
+- Session records now bind continuations to their original API type, resolved working
+  directory, and permission level, preventing agent sessions from being resumed through
+  chat or with broader permissions.
+- Requests continuing the same gateway session are serialized to prevent concurrent
+  provider-thread state races.
+- Provider working-directory failures now fail closed instead of silently falling back
+  to the user's home directory. Codex resumptions also reapply their sandbox mode.
 
 ### Fixed
 
@@ -58,23 +95,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never for a development dependency.
 - `make check` runs `coverage` rather than `test`, so the 85% floor fails the local gate
   too. `--cov` is not in `addopts`, so a plain `pytest` run reported green while CI failed.
-
-## [0.1.0] - 2026-08-20
-
-### Added
-
-- OpenAI-compatible HTTP gateway on `http://127.0.0.1:11435/v1`, backed by the
-  user's already-authenticated Codex and Claude Code CLIs.
-- `POST /v1/chat/completions` with coarse SSE streaming, `POST /v1/responses`
-  (documented subset), `POST /v1/agents/run`, `GET /v1/models`, `/health`, `/ready`.
-- Catalogued and passthrough model names with strict validation before any
-  subprocess spawn; `subscription/auto` routing alias with provider fallback.
-- Session continuation through the `X-Gateway-Session` header, backed by SQLite
-  metadata only — never provider credentials.
-- Per-provider concurrency limits, normalized error taxonomy, secret-redacting logging.
-- `subscription-gateway` CLI with `serve`, `status`, and `doctor`.
-- Docker image and Compose stack with an optional OpenWebUI service behind the
-  `webui` profile, loopback-only port publishing, and a non-root container.
 
 [Unreleased]: https://github.com/chrysogonus/sub2api/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/chrysogonus/sub2api/releases/tag/v0.1.0

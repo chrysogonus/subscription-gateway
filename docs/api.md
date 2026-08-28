@@ -136,8 +136,15 @@ Codex is resumed with `codex exec resume <thread-id>` and Claude with `--resume 
 the runtime returned a session identifier. Sessions are pinned to their provider: cross-provider
 fallback is intentionally disabled on continuation to prevent incoherent context.
 
-Responses also carry `X-Gateway-Provider` and `X-Gateway-Model` headers naming the provider and
-model that actually ran, which is worth checking when `subscription/auto` may have fallen back.
+Non-streaming responses also carry `X-Gateway-Provider` and `X-Gateway-Model` headers naming the
+provider and model that actually ran, which is worth checking when `subscription/auto` may have
+fallen back. Streaming responses return `X-Gateway-Session` only because fallback can select the
+provider after the SSE headers have already been committed.
+
+Sessions are also bound to their API type. An agent session cannot be resumed through chat, and
+its resolved working directory and permission level cannot change. Requests that continue the
+same session are serialized. Inactive session metadata is retained for 30 days by default; see
+[configuration](configuration.md#configyaml-reference).
 
 ### Role handling
 
@@ -155,17 +162,24 @@ curl http://127.0.0.1:11435/v1/agents/run \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer local' \
   -d '{
-    "model": "codex/gpt-5.6-sol",
+    "model": "claude-code/sonnet",
     "prompt": "Find the failing tests and explain the cause.",
     "cwd": "/home/user/workspace/project",
     "permissions": "read-only"
   }'
 ```
 
-Only `read-only` and `workspace-write` are accepted. `cwd` must exist, resolve without symlink
+Only `read-only` and `workspace-write` are accepted. The endpoint requires a configured gateway
+API key even when the server listens only on loopback. `cwd` must exist, resolve without symlink
 escape, and be inside `agent.allowed_directories` unless the user explicitly enables the broader
-configuration. Unrestricted access is not implemented. Write-capable fallback requires both
-request-level `fallback: true` and `agent.allow_write_fallback: true`.
+configuration.
+
+Agent execution currently uses Claude Code 2.1.248 or newer with `--restricted`. Read-only runs
+receive only `Read`, `Glob`, and `Grep`; workspace-write adds `Edit` and `Write`. Shell and command
+tools are not exposed. Codex models return `unsupported_provider_capability` on this endpoint
+because Codex's CLI sandbox does not confine read access to the requested directory. Write-capable
+fallback requires both request-level `fallback: true` and
+`agent.allow_write_fallback: true`.
 
 In Docker, use the **container** path rather than the host path:
 

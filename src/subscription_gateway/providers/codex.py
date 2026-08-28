@@ -33,7 +33,7 @@ class CodexProvider(Provider):
         chat=True,
         streaming=True,
         persistent_sessions=True,
-        filesystem_agent=True,
+        filesystem_agent=False,
         tools=True,
     )
 
@@ -76,7 +76,9 @@ class CodexProvider(Provider):
     def _working_directory(self, options: dict[str, Any] | None = None) -> Path:
         requested = (options or {}).get("cwd")
         path = Path(requested).expanduser() if requested else self.settings.working_directory
-        return path if path.is_dir() else Path.home()
+        if not path.is_dir():
+            raise NotADirectoryError(f"Codex working directory is unavailable: {path}")
+        return path
 
     def build_command(
         self,
@@ -95,6 +97,11 @@ class CodexProvider(Provider):
                 f"Model name '{model}' is not a valid provider model.",
                 code="invalid_model_name",
             )
+        if permissions not in {"read-only", "workspace-write"}:
+            raise invalid_request(
+                "Codex permissions must be read-only or workspace-write.",
+                code="invalid_permissions",
+            )
         if session_id and not session_id.startswith("pending:"):
             return [
                 self._executable,
@@ -105,6 +112,8 @@ class CodexProvider(Provider):
                 model,
                 "--ignore-user-config",
                 "--skip-git-repo-check",
+                "-c",
+                f'sandbox_mode="{permissions}"',
                 session_id,
                 prompt,
             ]
