@@ -8,6 +8,7 @@ require an installed CLI, credentials, or a network.
 
 from __future__ import annotations
 
+import dataclasses
 import socket
 from pathlib import Path
 from typing import Any, ClassVar
@@ -215,3 +216,69 @@ def test_an_override_that_violates_the_bind_policy_is_a_configuration_error(
 
     assert caught.value.code == 2
     assert "allow_remote" in capsys.readouterr().err
+
+
+SUBSCRIPTION_READY = dataclasses.replace(READY, subscription_auth=True)
+
+
+def write_remote_config(tmp_path: Path) -> Path:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "server:\n"
+        "  host: 0.0.0.0\n"
+        f"  port: {free_port()}\n"
+        "  api_key: local-secret\n"
+        "  allow_remote: true\n"
+        "storage:\n"
+        f"  sqlite_path: {tmp_path / 'gateway.db'}\n",
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def test_doctor_warns_when_a_reachable_bind_shares_a_subscription(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(StubRegistry, "statuses_to_return", [SUBSCRIPTION_READY])
+
+    with pytest.raises(SystemExit) as caught:
+        cli.main(["doctor", "--config", str(write_remote_config(tmp_path))])
+
+    # A warning, not a failed check: keeping the port private is a valid setup.
+    assert caught.value.code == 0
+    assert (
+        "[WARN] Subscription sharing: signed in with a subscription: Codex."
+        in capsys.readouterr().out
+    )
+
+
+def test_doctor_does_not_warn_about_api_key_logins(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["doctor", "--config", str(write_remote_config(tmp_path))])
+
+    assert "Subscription sharing" not in capsys.readouterr().out
+
+
+def test_doctor_does_not_warn_on_loopback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(StubRegistry, "statuses_to_return", [SUBSCRIPTION_READY])
+
+    with pytest.raises(SystemExit):
+        cli.main(["doctor", "--config", str(write_config(tmp_path))])
+
+    assert "Subscription sharing" not in capsys.readouterr().out
+
+
+def test_serve_warns_before_sharing_a_subscription(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(StubRegistry, "statuses_to_return", [SUBSCRIPTION_READY])
+    monkeypatch.setattr(cli, "create_app", lambda config: "app")
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: None)
+
+    cli.main(["serve", "--config", str(write_remote_config(tmp_path))])
+
+    assert "Warning: signed in with a subscription: Codex." in capsys.readouterr().err

@@ -166,3 +166,21 @@ async def test_codex_timeout_is_normalized(monkeypatch: pytest.MonkeyPatch) -> N
         )
     assert caught.value.error_type == "provider_timeout"
     assert caught.value.status_code == 504
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("output", "subscription"),
+    [("Logged in using ChatGPT", True), ("Logged in using an API key - sk-***", False)],
+)
+async def test_codex_login_status_reports_the_auth_method(
+    monkeypatch: pytest.MonkeyPatch, output: str, subscription: bool
+) -> None:
+    provider = CodexProvider(CodexSettings(command="/bin/echo"))
+
+    async def status(*args: Any, **kwargs: Any) -> ProcessResult:
+        return ProcessResult(0, output, "")
+
+    monkeypatch.setattr(codex_module, "run_process", status)
+    assert await provider.is_authenticated()
+    assert provider.subscription_auth is subscription

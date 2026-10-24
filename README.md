@@ -1,6 +1,6 @@
 # Subscription LLM Gateway
 
-[![CI](https://github.com/chrysogonus/sub2api/actions/workflows/ci.yml/badge.svg)](https://github.com/chrysogonus/sub2api/actions/workflows/ci.yml)
+[![CI](https://github.com/chrysogonus/subscription-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/chrysogonus/subscription-gateway/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
@@ -44,6 +44,22 @@ The gateway never reads browser cookies, extracts bearer tokens, intercepts prov
 calls undocumented private endpoints. Authentication stays with the official clients. It stores
 only gateway-to-provider session metadata in SQLite, never provider credentials.
 
+### Subscription logins are for your own use
+
+Both CLIs can sign in with a subscription (ChatGPT or Claude) or with an API key. The gateway
+works with either, but the terms differ:
+
+- **Subscription login:** one person, on their own machine, using their own account. Do not let
+  anyone else reach the gateway, and do not put it behind a shared OpenWebUI. Anthropic states
+  that subscription logins support ordinary use of Claude Code and that third parties may not
+  route requests through Free, Pro, or Max plan credentials. OpenAI recommends API keys for
+  programmatic Codex workflows.
+- **API key:** required for anything shared, remote, multi-user, or automated beyond your own
+  use. Usage is billed at API rates under your own developer agreement.
+
+`subscription-gateway doctor` and `serve` warn when the gateway listens on a non-loopback
+address while a provider is signed in with a subscription.
+
 ### Disclaimer
 
 This project is not affiliated with, endorsed by, or sponsored by OpenAI or Anthropic. Using it
@@ -54,8 +70,13 @@ before pointing anything at it.
 ## Requirements
 
 - Python 3.12 or newer;
-- Codex CLI, authenticated with `codex login`, for `codex/*` models;
-- Claude Code, authenticated with `claude auth login`, for `claude-code/*` models.
+- Codex CLI, authenticated with `codex login` or `codex login --with-api-key`, for `codex/*`
+  models;
+- Claude Code, authenticated with `claude auth login` or an `ANTHROPIC_API_KEY` in the gateway's
+  environment, for `claude-code/*` models.
+
+See [Provider authentication](docs/configuration.md#provider-authentication) for which login fits
+which setup.
 
 Filesystem-agent requests require Claude Code 2.1.248 or newer; the Docker image pins a compatible
 release. Codex remains available for chat, but is intentionally not exposed through the agent
@@ -67,8 +88,8 @@ returns 503, and `/v1/models` returns an empty list in that situation.
 ## Quickstart
 
 ```bash
-git clone https://github.com/chrysogonus/sub2api.git
-cd sub2api
+git clone https://github.com/chrysogonus/subscription-gateway.git
+cd subscription-gateway
 make install                  # prefers uv and the checked-in lock file, falls back to .venv and pip
 
 subscription-gateway doctor   # check the local setup

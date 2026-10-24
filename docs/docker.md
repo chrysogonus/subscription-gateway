@@ -105,6 +105,15 @@ configure Codex's supported file credential store on the host and run `codex log
 Claude similarly needs its official local client state under the mounted Claude directory and
 `.claude.json` file. Do not copy either credential into the repository or Dockerfile.
 
+To use API keys instead of subscription logins, set `ANTHROPIC_API_KEY` in `.env` (Compose
+forwards it to the gateway, and Claude Code then prefers it), and run
+`codex login --with-api-key` on the host so the mounted `~/.codex` holds an API-key login. See
+[Provider authentication](configuration.md#provider-authentication) for when that is required.
+
+Inside the container the gateway listens on `0.0.0.0`, so with a subscription login it logs the
+`signed in with a subscription` warning at startup. That is expected while the ports stay
+published on `127.0.0.1`; if you publish them anywhere else, switch to API keys first.
+
 For agent requests, use the container path — not the host path. See
 [the agent endpoint](api.md#agent-endpoint).
 
@@ -126,6 +135,16 @@ this machine, set `COMPOSE_PROFILES=webui` in `.env`.
 With the UI deployed, open `http://127.0.0.1:3001`. On the first visit, create the local
 administrator account. The model picker is populated from the gateway's live `/v1/models`
 response and shows usable Codex, Claude Code, and routing aliases.
+
+With subscription logins, OpenWebUI should have exactly one account: every other account uses
+your subscription. Right after creating the administrator, turn off **Enable New Sign Ups** under
+**Admin Panel → Settings → Authentication** and save. Do the same on an existing installation,
+and remove or leave unapproved any accounts other than your own under **Admin Panel → Users**.
+
+As a second guard, Compose sets `DEFAULT_USER_ROLE=pending`, so an account created while sign-ups
+are open waits for approval. OpenWebUI stores both settings in its data volume on first start, so
+an existing `open-webui-data` volume keeps whatever was saved there; check them in the admin
+panel's settings.
 
 The decision is reversible at any time. `make up-webui` adds the UI container next to an
 already running gateway, and `make down` followed by `make up` leaves the gateway running

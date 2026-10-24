@@ -56,10 +56,10 @@ dev = [
 subscription-gateway = "subscription_gateway.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/chrysogonus/sub2api"
-Repository = "https://github.com/chrysogonus/sub2api"
-Issues = "https://github.com/chrysogonus/sub2api/issues"
-Changelog = "https://github.com/chrysogonus/sub2api/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/chrysogonus/subscription-gateway"
+Repository = "https://github.com/chrysogonus/subscription-gateway"
+Issues = "https://github.com/chrysogonus/subscription-gateway/issues"
+Changelog = "https://github.com/chrysogonus/subscription-gateway/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/subscription_gateway"]

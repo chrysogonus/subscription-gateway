@@ -18,8 +18,8 @@ packaging — is fair game.
 ## Development setup
 
 ```bash
-git clone https://github.com/chrysogonus/sub2api.git
-cd sub2api
+git clone https://github.com/chrysogonus/subscription-gateway.git
+cd subscription-gateway
 make dev          # prefers uv and the checked-in uv.lock, falls back to .venv and pip
 ```
 

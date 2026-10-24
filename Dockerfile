@@ -23,8 +23,8 @@ ARG APP_VERSION=dev
 
 LABEL org.opencontainers.image.title="Subscription LLM Gateway" \
       org.opencontainers.image.description="Local OpenAI-compatible gateway for authenticated Codex and Claude Code clients" \
-      org.opencontainers.image.source="https://github.com/chrysogonus/sub2api" \
-      org.opencontainers.image.documentation="https://github.com/chrysogonus/sub2api#readme" \
+      org.opencontainers.image.source="https://github.com/chrysogonus/subscription-gateway" \
+      org.opencontainers.image.documentation="https://github.com/chrysogonus/subscription-gateway#readme" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${APP_VERSION}"
 

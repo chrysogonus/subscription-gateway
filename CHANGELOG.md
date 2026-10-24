@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `serve` and `doctor` warn when the gateway listens on a non-loopback address while a provider
+  is signed in with a subscription rather than an API key.
+- Compose forwards an optional `ANTHROPIC_API_KEY` to the gateway, so Claude Code can use an
+  API key in Docker.
+- Documentation of API-key logins for both providers, and of which login fits which setup.
+
+### Changed
+
+- The repository is renamed from `sub2api` to `subscription-gateway`, matching the package
+  name. GitHub redirects the old URLs.
+- The README states that subscription logins are for one person's own use and that shared,
+  remote, or multi-user setups need API keys.
+- The Compose OpenWebUI service sets `DEFAULT_USER_ROLE=pending`, so accounts after the first
+  administrator need approval, and the Docker guide says to turn off OpenWebUI sign-ups after
+  creating that administrator.
+
+### Fixed
+
+- Claude usage reported cache writes as cached input tokens when there were no cache reads.
+  `cached_input_tokens` now counts cache reads only.
+
 ## [0.1.0] - 2026-08-28
 
 ### Added
@@ -96,5 +119,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make check` runs `coverage` rather than `test`, so the 85% floor fails the local gate
   too. `--cov` is not in `addopts`, so a plain `pytest` run reported green while CI failed.
 
-[Unreleased]: https://github.com/chrysogonus/sub2api/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/chrysogonus/sub2api/releases/tag/v0.1.0
+[Unreleased]: https://github.com/chrysogonus/subscription-gateway/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/chrysogonus/subscription-gateway/releases/tag/v0.1.0

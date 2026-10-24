@@ -26,6 +26,7 @@ class ProviderStatus:
     authenticated: bool
     available: bool
     models: list[str]
+    subscription_auth: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +108,7 @@ class ProviderRegistry:
                 authenticated=authenticated,
                 available=enabled and installed and authenticated,
                 models=list(provider.models),
+                subscription_auth=provider.subscription_auth,
             )
 
         return await asyncio.gather(

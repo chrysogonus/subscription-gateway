@@ -9,6 +9,8 @@ services:
         APP_VERSION: ${APP_VERSION:-dev}
     environment:
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:-local}
+      # Optional: Claude Code uses this API key instead of the mounted subscription login.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_ALLOW_REMOTE: "true"
       GATEWAY_SQLITE_PATH: /data/gateway.db
@@ -47,6 +49,9 @@ services:
       DEFAULT_MODEL_PARAMS: '{"function_calling":"legacy"}'
       OPENAI_API_BASE_URL: http://gateway:11435/v1
       OPENAI_API_KEY: ${GATEWAY_API_KEY:-local}
+      # Backstop: accounts after the first admin wait for approval. Also turn off sign-ups
+      # in the admin panel (docs/docker.md), since each account uses your subscription.
+      DEFAULT_USER_ROLE: pending
       WEBUI_NAME: Subscription LLM Gateway
       WEBUI_SECRET_KEY: ${OPEN_WEBUI_SECRET_KEY:-}
     ports:

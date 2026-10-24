@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from subscription_gateway.config import ClaudeSettings
 from subscription_gateway.errors import GatewayError, ProviderError
+from subscription_gateway.providers import claude as claude_module
 from subscription_gateway.providers.claude import ClaudeProvider, parse_claude_result
 from subscription_gateway.providers.process import ProcessResult
 
@@ -22,6 +24,7 @@ def test_claude_subprocess_parsing() -> None:
             "input_tokens": 8,
             "output_tokens": 3,
             "cache_read_input_tokens": 2,
+            "cache_creation_input_tokens": 5,
         },
     }
     response = parse_claude_result(ProcessResult(0, json.dumps(payload), "diagnostics"))
@@ -32,6 +35,8 @@ def test_claude_subprocess_parsing() -> None:
         "completion_tokens": 3,
         "total_tokens": 11,
     }
+    # Writing to the cache is not a cache hit.
+    assert response.usage.cached_input_tokens == 2
 
 
 def test_claude_usage_limit_is_normalized() -> None:
@@ -163,3 +168,25 @@ def test_claude_command_accepts_full_model_name() -> None:
         agent_task=False,
     )
     assert command[command.index("--model") + 1] == "claude-fable-5"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "subscription"),
+    [
+        ({"loggedIn": True, "authMethod": "claude.ai", "apiProvider": "firstParty"}, True),
+        ({"loggedIn": True, "authMethod": "api_key", "apiProvider": "firstParty"}, False),
+        ({"loggedIn": True, "authMethod": "none", "apiProvider": "bedrock"}, False),
+    ],
+)
+async def test_claude_auth_status_reports_the_auth_method(
+    monkeypatch: pytest.MonkeyPatch, status: dict[str, Any], subscription: bool
+) -> None:
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+
+    async def auth_status(*args: Any, **kwargs: Any) -> ProcessResult:
+        return ProcessResult(0, json.dumps(status), "")
+
+    monkeypatch.setattr(claude_module, "run_process", auth_status)
+    assert await provider.is_authenticated()
+    assert provider.subscription_auth is subscription

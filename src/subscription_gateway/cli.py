@@ -13,10 +13,10 @@ import uvicorn
 from pydantic import ValidationError
 
 from subscription_gateway import __version__
-from subscription_gateway.config import GatewayConfig, load_config
+from subscription_gateway.config import LOOPBACK_HOSTS, GatewayConfig, load_config
 from subscription_gateway.main import create_app
 from subscription_gateway.model_names import PROVIDER_PREFIX_BY_NAME
-from subscription_gateway.providers.registry import ProviderRegistry
+from subscription_gateway.providers.registry import ProviderRegistry, ProviderStatus
 from subscription_gateway.sessions.storage import SQLiteSessionStorage
 
 
@@ -110,6 +110,10 @@ async def _doctor(config: GatewayConfig) -> int:
         )
     )
 
+    sharing = _sharing_warning(config, statuses)
+    if sharing:
+        checks.append(("Subscription sharing", False, sharing))
+
     print("Subscription LLM Gateway doctor")
     print()
     for name, ok, detail in checks:
@@ -143,6 +147,23 @@ def _port_available(host: str, port: int) -> bool:
     return True
 
 
+def _sharing_warning(config: GatewayConfig, statuses: list[ProviderStatus]) -> str | None:
+    """Subscription plans cover one person's own use; a reachable bind can share them."""
+
+    if config.server.host in LOOPBACK_HOSTS:
+        return None
+    names = [
+        status.display_name for status in statuses if status.available and status.subscription_auth
+    ]
+    if not names:
+        return None
+    return (
+        f"signed in with a subscription: {', '.join(names)}. The gateway listens on "
+        f"{config.server.host}, so anyone who can reach it uses your account, which subscription "
+        "terms do not allow. Keep the port private, or sign the CLIs in with API keys."
+    )
+
+
 def _yes_no(value: bool) -> str:
     return "yes" if value else "no"
 
@@ -156,6 +177,10 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(2) from exc
 
     if args.command == "serve":
+        if config.server.host not in LOOPBACK_HOSTS:
+            sharing = _sharing_warning(config, asyncio.run(ProviderRegistry(config).statuses()))
+            if sharing:
+                print(f"Warning: {sharing}", file=sys.stderr)
         uvicorn.run(
             create_app(config),
             host=config.server.host,

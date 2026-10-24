@@ -12,7 +12,7 @@ This is a pre-1.0 project. Fixes land on `main` and ship in the next tagged rele
 ## Reporting a vulnerability
 
 Please report privately through
-[GitHub Security Advisories](https://github.com/chrysogonus/sub2api/security/advisories/new)
+[GitHub Security Advisories](https://github.com/chrysogonus/subscription-gateway/security/advisories/new)
 rather than opening a public issue.
 
 Include the affected version, whether you ran natively or in Docker, reproduction steps, and the

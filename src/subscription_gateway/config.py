@@ -17,6 +17,8 @@ from subscription_gateway.model_names import (
     is_valid_provider_model,
 )
 
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
 
 class ModelSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -116,8 +118,7 @@ class ServerSettings(BaseModel):
 
     @model_validator(mode="after")
     def validate_remote_binding(self) -> ServerSettings:
-        loopback_hosts = {"127.0.0.1", "::1", "localhost"}
-        if self.host not in loopback_hosts:
+        if self.host not in LOOPBACK_HOSTS:
             if not self.allow_remote:
                 raise ValueError(
                     "non-loopback binding requires server.allow_remote=true; "

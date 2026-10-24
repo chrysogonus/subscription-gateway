@@ -112,7 +112,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: sub2api:ci
+          tags: subscription-gateway:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -121,8 +121,8 @@ jobs:
       # request is made.
       - name: Smoke-test the image
         run: |
-          docker run --rm --entrypoint subscription-gateway sub2api:ci --version
-          docker run --rm --entrypoint sh sub2api:ci -c '
+          docker run --rm --entrypoint subscription-gateway subscription-gateway:ci --version
+          docker run --rm --entrypoint sh subscription-gateway:ci -c '
             set -eux
             command -v codex
             command -v claude

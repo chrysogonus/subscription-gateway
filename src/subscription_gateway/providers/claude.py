@@ -59,11 +59,19 @@ class ClaudeProvider(Provider):
             return False
         if result.returncode != 0:
             return False
+        self.subscription_auth = True
         try:
             status = json.loads(result.stdout)
         except json.JSONDecodeError:
             return "logged in" in f"{result.stdout}\n{result.stderr}".lower()
-        return bool(status.get("loggedIn")) if isinstance(status, dict) else False
+        if not isinstance(status, dict):
+            return False
+        # Unknown methods count as a subscription so the sharing warning errs on the safe side.
+        self.subscription_auth = (
+            status.get("authMethod") != "api_key"
+            and status.get("apiProvider", "firstParty") == "firstParty"
+        )
+        return bool(status.get("loggedIn"))
 
     async def is_available(self) -> bool:
         now = time.monotonic()
@@ -245,11 +253,7 @@ def parse_claude_result(result: ProcessResult) -> ProviderResponse:
     usage = ProviderUsage(
         input_tokens=int(raw_usage.get("input_tokens") or 0),
         output_tokens=int(raw_usage.get("output_tokens") or 0),
-        cached_input_tokens=int(
-            raw_usage.get("cache_read_input_tokens")
-            or raw_usage.get("cache_creation_input_tokens")
-            or 0
-        ),
+        cached_input_tokens=int(raw_usage.get("cache_read_input_tokens") or 0),
     )
     session_id = payload.get("session_id")
     return ProviderResponse(

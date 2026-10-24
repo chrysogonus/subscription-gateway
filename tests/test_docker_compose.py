@@ -22,6 +22,8 @@ def test_open_webui_is_wired_to_gateway() -> None:
 
     assert webui["environment"]["OPENAI_API_BASE_URL"] == "http://gateway:11435/v1"
     assert webui["environment"]["ENABLE_OLLAMA_API"] == "false"
+    # Every other OpenWebUI account would use the owner's subscription.
+    assert webui["environment"]["DEFAULT_USER_ROLE"] == "pending"
     assert json.loads(webui["environment"]["DEFAULT_MODEL_PARAMS"]) == {
         "function_calling": "legacy"
     }
@@ -47,6 +49,11 @@ def test_gateway_mounts_a_read_only_config() -> None:
         gateway["environment"]["SUBSCRIPTION_GATEWAY_CONFIG"]
         == "/etc/subscription-gateway/config.yaml"
     )
+
+
+def test_gateway_forwards_an_optional_anthropic_api_key() -> None:
+    gateway = _compose()["services"]["gateway"]
+    assert gateway["environment"]["ANTHROPIC_API_KEY"] == "${ANTHROPIC_API_KEY:-}"
 
 
 def test_makefile_selects_the_declared_profile() -> None:

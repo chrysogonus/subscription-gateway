@@ -56,6 +56,8 @@ class Provider(ABC):
     name: str
     display_name: str
     capabilities: ProviderCapabilities
+    # Set by is_authenticated(): True unless the CLI reports an API-key login.
+    subscription_auth: bool = False
 
     def __init__(self, models: dict[str, str], default_alias: str | None = None) -> None:
         self.models = models

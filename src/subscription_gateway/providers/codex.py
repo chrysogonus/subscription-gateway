@@ -58,6 +58,7 @@ class CodexProvider(Provider):
         except (OSError, TimeoutError):
             return False
         output = f"{result.stdout}\n{result.stderr}".lower()
+        self.subscription_auth = "api key" not in output
         return result.returncode == 0 and "logged in" in output and "not logged in" not in output
 
     async def is_available(self) -> bool:

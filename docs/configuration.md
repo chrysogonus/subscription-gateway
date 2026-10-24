@@ -108,11 +108,34 @@ Supported overrides:
 Values whose names contain `TOKEN`, `KEY`, `SECRET`, or `PASSWORD` are never emitted by gateway
 logging.
 
+## Provider authentication
+
+The gateway never handles provider credentials: each CLI uses whatever login it already has, and
+inherits the gateway's environment.
+
+| Provider | Subscription login | API-key login |
+| --- | --- | --- |
+| Codex | `codex login` (ChatGPT) | `printenv OPENAI_API_KEY \| codex login --with-api-key` |
+| Claude Code | `claude auth login` (Claude) | `ANTHROPIC_API_KEY` set where the gateway runs |
+
+`codex login status` and `claude auth status` show which method is active; `ANTHROPIC_API_KEY`
+takes precedence over a Claude subscription login while it is set.
+
+Use a subscription login only for your own use on your own machine. Use API keys for anything
+shared, remote, multi-user, or automated beyond that: Anthropic limits subscription logins to
+ordinary use of Claude Code and does not allow routing requests through plan credentials for
+others, and OpenAI recommends API keys for programmatic Codex workflows. API keys are billed at API
+rates.
+
 ## Binding and remote access
 
 The default base URL is `http://127.0.0.1:11435/v1`. The gateway will not bind to a non-loopback
 address unless `server.allow_remote: true` **and** a local API key are both explicitly configured.
 This remains a personal gateway; remote multi-user deployment is out of scope.
+
+On a non-loopback address, `serve` prints a warning and `doctor` reports a `Subscription sharing`
+warning for each provider signed in with a subscription. Anyone who can reach the gateway uses
+that account; switch the provider to an API key before exposing the port.
 
 ## Local API authentication
 
