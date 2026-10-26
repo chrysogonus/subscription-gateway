@@ -54,5 +54,8 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           body_path: release-notes.md
-          files: dist/*
+          # Not dist/*: uv build also writes dist/.gitignore, which would ship as an asset.
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
           generate_release_notes: true

@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependabot's Python updates use the `uv` ecosystem, so they update `uv.lock` along with
   `pyproject.toml` instead of failing the `--locked` install in CI.
 - The image installs `libatomic1`, which Node 26 and later need to start.
+- GitHub Releases attach only the wheel and sdist, no longer the `.gitignore` that `uv build`
+  writes into `dist/`.
 
 ## [0.1.0] - 2026-08-28
 
