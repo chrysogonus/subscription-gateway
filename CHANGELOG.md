@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-26
+
 ### Added
 
 - `serve` and `doctor` warn when the gateway listens on a non-loopback address while a provider
@@ -124,5 +126,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make check` runs `coverage` rather than `test`, so the 85% floor fails the local gate
   too. `--cov` is not in `addopts`, so a plain `pytest` run reported green while CI failed.
 
-[Unreleased]: https://github.com/chrysogonus/subscription-gateway/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/chrysogonus/subscription-gateway/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/chrysogonus/subscription-gateway/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/chrysogonus/subscription-gateway/releases/tag/v0.1.0
