@@ -6,7 +6,7 @@ ARG UV_VERSION=0.11.21
 # file and is deleted before the final layer.
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
-FROM node:22-slim AS provider-clients
+FROM node:26-slim AS provider-clients
 
 ARG CODEX_VERSION
 ARG CLAUDE_CODE_VERSION
