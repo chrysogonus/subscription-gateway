@@ -47,6 +47,7 @@ RUN apt-get update \
         bash \
         ca-certificates \
         git \
+        libatomic1 \
         libstdc++6 \
         ripgrep \
         tini \
