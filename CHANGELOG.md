@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Claude usage reported cache writes as cached input tokens when there were no cache reads.
   `cached_input_tokens` now counts cache reads only.
+- Dependabot's Python updates use the `uv` ecosystem, so they update `uv.lock` along with
+  `pyproject.toml` instead of failing the `--locked` install in CI.
+- The image installs `libatomic1`, which Node 26 and later need to start.
 
 ## [0.1.0] - 2026-08-28
 
