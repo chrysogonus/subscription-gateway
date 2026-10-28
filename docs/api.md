@@ -177,7 +177,7 @@ curl http://127.0.0.1:11435/v1/responses \
 | Field | Handling |
 | --- | --- |
 | `model` | Required. |
-| `input` | A string, or a list of chat-style messages (`role` + string or `{"type": "text"}` content). |
+| `input` | A string, or a list of messages: `role` plus a string or a list of `input_text`, `output_text`, or `text` parts. Message items may include `"type": "message"`. |
 | `instructions` | Sent ahead of the input as a `developer` message. |
 | `stream` | `true` for [SSE streaming](#streaming). |
 | `gateway_session_id`, or `metadata.gateway_session_id` | Continue a session. |
@@ -185,8 +185,9 @@ curl http://127.0.0.1:11435/v1/responses \
 | `max_output_tokens`, `temperature` | Validated, then ignored. |
 | Anything else (`reasoning`, `text`, `store`, …) | Accepted and ignored. |
 
-Content parts other than `{"type": "text"}`, including the Responses-style `input_text` and
-`input_image`, fail validation with `400 request_validation_error`.
+Earlier output can be sent back as `assistant` messages with `output_text` parts; extra keys
+such as `annotations` are ignored. Non-text parts such as `input_image` and `input_file`, and
+non-message items such as function calls, fail validation with `400 request_validation_error`.
 
 The response has `object: "response"`, `status: "completed"`, one assistant `message` item with an
 `output_text` part, a top-level `output_text`, `usage` with `input_tokens`/`output_tokens`/
