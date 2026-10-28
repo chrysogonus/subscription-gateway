@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Quickstart uses `make doctor`/`make serve`, because `make install` does not put the
   command on `PATH`.
 
+### Fixed
+
+- `POST /v1/responses` accepts the Responses API's own `input_text` and `output_text` content
+  parts. It rejected them with `request_validation_error`, which broke clients that send
+  structured input or replay earlier output.
+
 ## [0.2.0] - 2026-10-26
 
 ### Added

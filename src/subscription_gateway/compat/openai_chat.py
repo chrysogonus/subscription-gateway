@@ -4,18 +4,23 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from subscription_gateway.errors import invalid_request
 from subscription_gateway.providers.base import ProviderResponse
 
+# Chat Completions names text parts "text"; the Responses API uses "input_text" and,
+# for replayed assistant output, "output_text".
+TextPartType = Literal["text", "input_text", "output_text"]
+
 
 class TextContentPart(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # Ignore, not forbid: replayed output_text parts carry annotations and logprobs.
+    model_config = ConfigDict(extra="ignore")
 
-    type: Literal["text"]
+    type: TextPartType
     text: str
 
 
@@ -82,7 +87,7 @@ def messages_to_prompt(messages: list[dict[str, Any]] | list[ChatMessage]) -> st
                 content = "\n".join(
                     str(part.get("text", ""))
                     for part in raw_content
-                    if isinstance(part, dict) and part.get("type") == "text"
+                    if isinstance(part, dict) and part.get("type") in get_args(TextPartType)
                 )
             else:
                 content = str(raw_content)
