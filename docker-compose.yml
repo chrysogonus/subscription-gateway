@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        CODEX_VERSION: ${CODEX_VERSION:-0.150.1}
+        CODEX_VERSION: ${CODEX_VERSION:-0.163.0}
         CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.251}
         GATEWAY_UID: ${GATEWAY_UID:-1000}
         APP_VERSION: ${APP_VERSION:-dev}
