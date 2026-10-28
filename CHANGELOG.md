@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Docker now bundles Codex 0.163.0, which serves models that 0.150.1 rejected, such as
+  `gpt-6-luna`.
+
 ### Fixed
 
 - `POST /v1/responses` accepts the Responses API's own `input_text` and `output_text` content
