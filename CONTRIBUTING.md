@@ -33,11 +33,13 @@ make precommit    # install the ruff and whitespace pre-commit hooks
 
 ```bash
 make fix          # ruff autofixes + ruff format
-make check        # ruff check, mypy --strict, pytest --cov — the same gate CI runs
+make check        # ruff check, ruff format --check, mypy --strict, pytest --cov
 make coverage     # just the test suite with a coverage report
 ```
 
-CI runs `ruff format --check`, so run `make fix` before pushing. `mypy` runs in `strict` mode over
+`make check` is the gate CI's static and test jobs run. CI also runs the tests on Python 3.13,
+validates `docker-compose.yml`, builds the image, and checks that `codex` and `claude` resolve
+inside it. CI runs `ruff format --check`, so run `make fix` before pushing. `mypy` runs in `strict` mode over
 both `src/` and `tests/`, and the codebase is clean under it; new code is expected to stay that way.
 
 Two things fail a run that used to only produce output:
@@ -93,5 +95,6 @@ not be available while the repository is private.
    git push origin main --follow-tags
    ```
 
-The `release` workflow re-runs the checks, builds the wheel and sdist, and creates the GitHub
-Release. Nothing is published to PyPI or a container registry.
+The `release` workflow re-runs the CI checks, fails if the tag does not match the
+`pyproject.toml` version, builds the wheel and sdist, and creates the GitHub Release with the
+matching `CHANGELOG.md` section as its notes. Nothing is published to PyPI or a container registry.

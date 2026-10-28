@@ -4,7 +4,7 @@
 
 | Version | Supported |
 | --- | --- |
-| `0.1.x` | Yes |
+| `0.2.x` | Yes |
 | older | No |
 
 This is a pre-1.0 project. Fixes land on `main` and ship in the next tagged release.
@@ -41,6 +41,14 @@ Some behavior that looks alarming is intentional and documented. It is not a vul
   supported, but Codex is not exposed through the filesystem-agent endpoint because its sandbox
   does not provide the required read boundary. Write-capable fallback requires two separate
   opt-ins.
+- **Codex chat runs in a read-only sandbox, not an empty one.** Codex chat requests run in
+  `providers.codex.working_directory` (default: your home directory) with
+  `--sandbox read-only`. That sandbox blocks writes, but Codex can still read files and run
+  read-only commands while answering. Point `working_directory` at a narrower directory, or
+  disable Codex, if that matters for your setup. Claude chat runs with no tools at all.
+- **Plain-text logs are not filtered.** The gateway never logs its configuration or API key,
+  and JSON logs additionally mask secret-named fields. Prompt content appears only with
+  `logging.debug_prompts: true` at `DEBUG` level.
 
 Reports that *are* in scope include: model-name or path validation that can be bypassed, command
 or argument injection into a provider CLI, sandbox escape from `POST /v1/agents/run`, credentials
@@ -49,7 +57,8 @@ authentication bypass when `GATEWAY_API_KEY` is set.
 
 Gateway sessions record their API type, resolved working directory, and permission level. Those
 attributes cannot change on continuation, and requests for the same session are serialized so
-provider thread state cannot race. Inactive metadata is deleted after 30 days by default.
+provider thread state cannot race. Metadata unused for 30 days (by default) is deleted at
+startup and then at most hourly.
 
 ## What this project never does
 

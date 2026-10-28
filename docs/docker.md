@@ -2,10 +2,36 @@
 
 [← Documentation index](README.md)
 
-The supplied image installs the pinned, tested official Codex and Claude Code clients. Provider
-credentials are never copied into an image: Compose mounts the host's existing client state only
-at runtime. The HTTP port remains published on `127.0.0.1`, and the container runs as a non-root
-user with all Linux capabilities dropped.
+The supplied image installs pinned, tested releases of the official Codex and Claude Code
+clients. Provider credentials are never copied into an image: Compose mounts the host's existing
+client state only at runtime. The published ports are bound to `127.0.0.1`, and the gateway
+container runs as a non-root user with all Linux capabilities dropped and `no-new-privileges`.
+
+```mermaid
+flowchart LR
+    subgraph host["Host (127.0.0.1 only)"]
+        H1["~/.codex"]
+        H2["~/.claude + ~/.claude.json"]
+        H3["~/workspace"]
+        H4["config.yaml<br/>(or config.example.yaml)"]
+        B["Browser / apps"]
+    end
+    subgraph compose["Compose stack"]
+        G["gateway<br/>:11435"]
+        W["open-webui<br/>:3001 → 8080<br/>(webui profile only)"]
+        V1[("gateway-data<br/>/data/gateway.db")]
+        V2[("open-webui-data")]
+    end
+    B -->|"127.0.0.1:11435"| G
+    B -->|"127.0.0.1:3001"| W
+    W -->|"http://gateway:11435/v1"| G
+    H1 -.->|"rw mount"| G
+    H2 -.->|"rw mount"| G
+    H3 -.->|"rw mount at /home/gateway/workspace"| G
+    H4 -.->|"ro mount"| G
+    G --- V1
+    W --- V2
+```
 
 ## Start the stack
 
@@ -37,9 +63,10 @@ docker compose up --build --detach                     # gateway only
 docker compose --profile webui up --build --detach     # gateway and OpenWebUI
 ```
 
-When OpenWebUI is deployed, open the chat UI at `http://127.0.0.1:3001`. Both the UI and gateway
-API ports are bound to the host loopback interface. The first OpenWebUI account becomes the local
-administrator; keep its credentials private even though the service is not published remotely.
+When OpenWebUI is deployed, open the chat UI at `http://127.0.0.1:3001` (or the
+`OPEN_WEBUI_PORT` you set). Both the UI and gateway API ports are bound to the host loopback
+interface. The first OpenWebUI account becomes the local administrator; keep its credentials
+private even though the service is not published remotely.
 
 The first image build installs Codex and Claude Code and can take several minutes. Subsequent
 starts use the cached image.
@@ -47,6 +74,8 @@ starts use the cached image.
 Test it from the host:
 
 ```bash
+make smoke            # curls /health and /v1/models with $GATEWAY_API_KEY (default: local)
+
 curl http://127.0.0.1:11435/v1/models \
   -H 'Authorization: Bearer local'
 ```
@@ -58,16 +87,56 @@ curl http://127.0.0.1:11435/v1/models \
 - Claude state: `$HOME/.claude` mounted at `/home/gateway/.claude`;
 - Claude user state: `$HOME/.claude.json` mounted at `/home/gateway/.claude.json`;
 - agent workspace: `$HOME/workspace` mounted at `/home/gateway/workspace`;
-- SQLite metadata: the Docker-managed `gateway-data` volume;
+- SQLite metadata: the Docker-managed `gateway-data` volume, at `/data/gateway.db`;
 - OpenWebUI: not deployed unless the `webui` profile is selected; when it is,
   `http://127.0.0.1:3001`, with data in the `open-webui-data` volume.
 
+## Pinned versions
+
+| Component | Version | Override with |
+| --- | --- | --- |
+| Codex CLI (`@openai/codex`) | `0.163.0` | `CODEX_VERSION` |
+| Claude Code (`@anthropic-ai/claude-code`) | `2.1.251` | `CLAUDE_CODE_VERSION` |
+| OpenWebUI image | `v0.11.0-slim` | `OPEN_WEBUI_VERSION` |
+| Node.js base (for the CLIs) | `26-slim` | — (Dockerfile) |
+| Python base | `3.12-slim` | — (Dockerfile) |
+| uv (build only, removed from the final image) | `0.11.21` | `UV_VERSION` build arg |
+
+Python dependencies are installed from the checked-in `uv.lock` with hash verification. Changing
+a CLI version takes effect on the next build (`make up` always rebuilds). The image disables the
+Claude Code auto-updater, so the pinned release stays in place.
+
+## Compose variables
+
+Compose reads these from the shell or from a `.env` file next to `docker-compose.yml`.
+`make env` creates `.env` from [`.env.docker.example`](../.env.docker.example) without
+overwriting an existing one.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `GATEWAY_API_KEY` | `local` | Gateway token; also given to OpenWebUI as its API key. An empty value still means `local`. |
+| `ANTHROPIC_API_KEY` | empty | Forwarded to the gateway so Claude Code uses an API key instead of the mounted login |
+| `COMPOSE_PROFILES` | empty | `webui` makes every `docker compose` command include OpenWebUI |
+| `GATEWAY_CONFIG_FILE` | `./config.example.yaml` | Host file mounted read-only as the gateway's `config.yaml`. The `make` targets use `./config.yaml` once it exists. |
+| `GATEWAY_UID` | `1000` (`make` uses `id -u`) | UID of the container user, so mounted client state stays writable |
+| `HOST_CODEX_HOME` | `$HOME/.codex` | Host Codex state |
+| `HOST_CLAUDE_HOME` | `$HOME/.claude` | Host Claude state directory |
+| `HOST_CLAUDE_CONFIG` | `$HOME/.claude.json` | Host Claude user-state file |
+| `GATEWAY_WORKSPACE` | `$HOME/workspace` | Host directory mounted at `/home/gateway/workspace` for agent runs |
+| `OPEN_WEBUI_PORT` | `3001` | Host port for OpenWebUI |
+| `OPEN_WEBUI_SECRET_KEY` | empty (generated) | OpenWebUI session secret; set a stable random value before first start |
+| `CODEX_VERSION`, `CLAUDE_CODE_VERSION`, `OPEN_WEBUI_VERSION` | see [Pinned versions](#pinned-versions) | Client and UI releases |
+| `APP_VERSION` | `dev` | Version label written into the image metadata |
+
+`.env` only feeds these Compose settings. The gateway container receives only the variables
+Compose passes to it explicitly, so native overrides such as `GATEWAY_LOG_LEVEL` or
+`GATEWAY_PORT` in `.env` have no effect. Put those settings in `config.yaml`.
+
 ## Configuration in Docker
 
-The container reads `config.yaml` from a read-only mount, which is how the model catalog is
-customized in Docker — no environment variable configures models. It defaults to
-`./config.example.yaml`, and the `make` targets point it at `./config.yaml` as soon as that file
-exists:
+The container reads `config.yaml` from a read-only mount, which is how the model catalog and
+other settings are customized in Docker. It defaults to `./config.example.yaml`, and the `make`
+targets point it at `./config.yaml` as soon as that file exists:
 
 ```bash
 make config          # copy config.example.yaml to config.yaml
@@ -76,19 +145,23 @@ make up
 ```
 
 Without `make`, set `GATEWAY_CONFIG_FILE` yourself. Point it only at a file that exists: Docker
-creates a *directory* for a missing bind source, and the gateway then refuses to start. The
-environment variables in `docker-compose.yml` are applied after the file, so `GATEWAY_HOST`,
-`GATEWAY_API_KEY`, and `GATEWAY_SQLITE_PATH` still win over anything it sets.
+creates a *directory* for a missing bind source, and the gateway then refuses to start.
 
-Override host paths or pinned CLI releases through the variables shown in
-[`.env.docker.example`](../.env.docker.example). Compose automatically reads a file named `.env`,
-so one option is:
+Compose sets these container variables, and they win over the file:
 
-```bash
-cp .env.docker.example .env
-# Edit .env for this machine, then:
-docker compose up --build --detach
-```
+| Container variable | Value | So this `config.yaml` key is ignored |
+| --- | --- | --- |
+| `GATEWAY_HOST` | `0.0.0.0` | `server.host` |
+| `GATEWAY_ALLOW_REMOTE` | `true` | `server.allow_remote` |
+| `GATEWAY_API_KEY` | `${GATEWAY_API_KEY:-local}` | `server.api_key` |
+| `GATEWAY_SQLITE_PATH` | `/data/gateway.db` | `storage.sqlite_path` |
+| `SUBSCRIPTION_GATEWAY_CONFIG` | `/etc/subscription-gateway/config.yaml` | — (the mounted file) |
+
+Keep `server.port` at `11435` in Docker: the published port and the image health check both use
+it.
+
+Running the image without Compose (`docker run`) also needs `-e GATEWAY_API_KEY=…`. The image
+binds `0.0.0.0` and refuses to start without a key.
 
 ## Credentials in containers
 
@@ -113,6 +186,10 @@ forwards it to the gateway, and Claude Code then prefers it), and run
 Inside the container the gateway listens on `0.0.0.0`, so with a subscription login it logs the
 `signed in with a subscription` warning at startup. That is expected while the ports stay
 published on `127.0.0.1`; if you publish them anywhere else, switch to API keys first.
+
+`make docker-doctor` runs `doctor` inside the running container. Its `Server port` check always
+reports the port as in use there, because the gateway is holding it, and the command then exits
+1. The other checks are still meaningful.
 
 For agent requests, use the container path — not the host path. See
 [the agent endpoint](api.md#agent-endpoint).
@@ -152,11 +229,12 @@ without it. The `open-webui-data` volume survives either direction, so accounts 
 return if the UI is redeployed later; `make purge CONFIRM=1` is the explicit way to delete
 those volumes.
 
-The Compose connection uses `http://gateway:11435/v1` on the private container network. Ollama is
-disabled, so the model picker is not cluttered by an unavailable default backend. OpenWebUI state
-is stored in the `open-webui-data` Docker volume. The pinned slim image avoids bundling a large
-local embedding model; ordinary chat works normally, while knowledge/RAG features may download
-their selected embedding model during the first startup.
+The Compose connection uses `http://gateway:11435/v1` on the private container network, and
+OpenWebUI starts only after the gateway's health check passes. Ollama is disabled, so the model
+picker is not cluttered by an unavailable default backend. The OpenWebUI container uses the
+image's own user and capabilities, with `no-new-privileges`. The pinned slim image avoids
+bundling a large local embedding model; ordinary chat works normally, while knowledge/RAG
+features may download their selected embedding model during the first startup.
 
 OpenWebUI is configured with legacy function calling because Codex and Claude Code are agent
 runtimes, not OpenAI tool-calling endpoints. In this mode OpenWebUI performs its compatible
@@ -185,4 +263,5 @@ make down
 ```
 
 `make down` includes the `webui` profile, so it removes the OpenWebUI container as well even
-when the last `make up` did not start it. `make purge CONFIRM=1` also deletes the data volumes.
+when the last `make up` did not start it. `make restart` restarts only the gateway unless you add
+`WEBUI=1`. `make purge CONFIRM=1` also deletes the data volumes.

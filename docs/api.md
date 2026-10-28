@@ -4,19 +4,44 @@
 
 The base URL is `http://127.0.0.1:11435/v1`.
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /health` | Liveness. Healthy even when no provider is installed. |
-| `GET /ready` | Readiness. `503` while no provider is available. |
-| `GET /v1/models` | Catalogued models from available providers. |
-| `POST /v1/chat/completions` | OpenAI Chat Completions, with coarse SSE streaming. |
-| `POST /v1/responses` | A documented subset of the Responses API. |
-| `POST /v1/agents/run` | Filesystem agent runs, with explicit permissions. |
+| Endpoint | Purpose | Needs the API key¹ |
+| --- | --- | --- |
+| `GET /health` | Liveness. Always `{"status": "ok"}`, even with no provider installed. | no |
+| `GET /ready` | Readiness per provider. `503` while no provider is ready. | no |
+| `GET /v1/models` | Catalogued models from ready providers. | yes |
+| `POST /v1/chat/completions` | OpenAI Chat Completions, text only, with coarse SSE streaming. | yes |
+| `POST /v1/responses` | A text subset of the Responses API. | yes |
+| `POST /v1/agents/run` | Claude Code filesystem agent runs, with explicit permissions. | always² |
+| `GET /docs`, `/redoc`, `/openapi.json` | FastAPI's generated interactive docs and schema. | no |
+
+¹ Only when a key is configured. Send `Authorization: Bearer <key>` or `X-Api-Key: <key>`.
+² The agent endpoint is disabled until a key is configured, even on loopback.
 
 The examples below send `Authorization: Bearer local`, which matches the Compose default. Drop
-the header when running `subscription-gateway serve` directly with no key configured, or change
-the value to the configured token. See
-[local API authentication](configuration.md#local-api-authentication).
+the header when running natively with no key configured, or change the value to the configured
+token. See [local API authentication](configuration.md#local-api-authentication).
+
+Every response carries an `X-Request-ID` header. The gateway reuses the one you send, or
+generates a UUID, and logs it with the request.
+
+## Health and readiness
+
+```bash
+curl http://127.0.0.1:11435/ready
+```
+
+```json
+{
+  "status": "ready",
+  "providers": {
+    "codex":  {"installed": true, "authenticated": true,  "available": true},
+    "claude": {"installed": true, "authenticated": false, "available": false}
+  }
+}
+```
+
+`status` is `not_ready`, with HTTP 503, when no provider is available. Each call runs
+`codex login status` and `claude auth status`.
 
 ## Models
 
@@ -24,6 +49,21 @@ the value to the configured token. See
 curl http://127.0.0.1:11435/v1/models \
   -H 'Authorization: Bearer local'
 ```
+
+```json
+{
+  "object": "list",
+  "data": [
+    {"id": "codex/gpt-5.6-sol", "object": "model", "owned_by": "local-gateway"},
+    {"id": "claude-code/opus",  "object": "model", "owned_by": "local-gateway"},
+    {"id": "subscription/auto", "object": "model", "owned_by": "local-gateway"}
+  ]
+}
+```
+
+Only ready providers are listed, unless a provider sets `advertise_unavailable: true`.
+`subscription/auto` is appended whenever at least one model is listed. See
+[Models and routing](models-and-routing.md).
 
 ## Chat completions
 
@@ -55,6 +95,44 @@ curl http://127.0.0.1:11435/v1/chat/completions \
   }'
 ```
 
+### Request fields
+
+| Field | Handling |
+| --- | --- |
+| `model` | Required. See [Models and routing](models-and-routing.md). |
+| `messages` | Required, at least one. `role` is `system`, `developer`, `user`, or `assistant`. `content` is a string or a list of `{"type": "text", "text": "..."}` parts. |
+| `stream` | `true` for [SSE streaming](#streaming). |
+| `gateway_session_id` | Continue a session; same as the `X-Gateway-Session` header. |
+| `tools`, `tool_choice` | Rejected with `400 unsupported_feature`, even when empty. |
+| `temperature`, `top_p`, `max_tokens`, `max_completion_tokens`, `stop`, `user` | Validated, then **ignored**. The agent CLIs have no stable equivalents. |
+| Anything else (`n`, `response_format`, `seed`, …) | Accepted and ignored. |
+
+Image, audio, and file content parts and the `tool`/`function` roles fail validation with
+`400 request_validation_error`. A message's `name` is accepted but not passed on.
+
+Being ignored is part of why the gateway does not describe itself as a raw model API: the
+runtime decides sampling, length, and stopping.
+
+### Response
+
+```json
+{
+  "id": "chatcmpl-…",
+  "object": "chat.completion",
+  "created": 1793145600,
+  "model": "codex/gpt-5.6-sol",
+  "choices": [
+    {"index": 0, "message": {"role": "assistant", "content": "…"}, "finish_reason": "stop"}
+  ],
+  "usage": {"prompt_tokens": 812, "completion_tokens": 240, "total_tokens": 1052},
+  "gateway_session_id": "6f1c…"
+}
+```
+
+`model` echoes the requested name. `finish_reason` is always `stop`. The headers
+`X-Gateway-Session`, `X-Gateway-Provider`, and `X-Gateway-Model` are described under
+[Sessions](#sessions).
+
 ## Streaming
 
 ```bash
@@ -68,16 +146,26 @@ curl -N http://127.0.0.1:11435/v1/chat/completions \
   }'
 ```
 
-The current provider adapters return a valid coarse stream when a runtime does not expose stable
-token deltas: the full final assistant message is sent as one content chunk, followed by the final
-chunk and `[DONE]`. Disconnecting cancels and reaps the child process.
+Neither CLI exposes stable token deltas, so streams are **coarse**: the whole answer arrives as
+one content chunk once the run finishes.
+
+| API | Events, in order |
+| --- | --- |
+| Chat | a `role: assistant` chunk → one content chunk → a chunk with `finish_reason: "stop"` → `data: [DONE]` |
+| Responses | `response.created` → one `response.output_text.delta` → `response.completed` (with `output_text`) → `data: [DONE]` |
+
+Streams carry no usage block. Streaming responses return only the `X-Gateway-Session` header,
+plus `Cache-Control: no-cache` and `X-Accel-Buffering: no`, because the provider is chosen after
+the headers are sent.
+
+Request, routing, and session errors still return a normal JSON error status. A provider
+failure after the stream has started arrives **inside** the HTTP 200 stream as
+`data: {"error": {...}}` (chat) or `data: {"type": "error", "error": {...}}` (Responses),
+followed by `data: [DONE]`. A new stream can fall back to another provider only before any text
+was sent. If a new stream fails before any output, its session is discarded. Disconnecting
+cancels and reaps the child process.
 
 ## Responses API
-
-The implemented Responses API subset accepts plain text or message-list `input`, optional
-`instructions`, `max_output_tokens`, `temperature`, and `stream`. Tool calls, images,
-`previous_response_id`, hosted tools, and raw provider-specific reasoning objects are rejected
-explicitly rather than simulated.
 
 ```bash
 curl http://127.0.0.1:11435/v1/responses \
@@ -86,9 +174,23 @@ curl http://127.0.0.1:11435/v1/responses \
   -d '{"model":"subscription/auto","input":"Explain cgroups briefly."}'
 ```
 
-Sampling fields (`temperature`, `top_p`), token limits, and stop sequences are accepted so common
-clients can connect, but the current agent CLIs do not provide stable equivalents and may ignore
-them. This is another reason the gateway does not describe itself as a raw model API.
+| Field | Handling |
+| --- | --- |
+| `model` | Required. |
+| `input` | A string, or a list of chat-style messages (`role` + string or `{"type": "text"}` content). |
+| `instructions` | Sent ahead of the input as a `developer` message. |
+| `stream` | `true` for [SSE streaming](#streaming). |
+| `gateway_session_id`, or `metadata.gateway_session_id` | Continue a session. |
+| `tools`, `previous_response_id` | Rejected with `400 unsupported_feature`. Use `X-Gateway-Session` for continuation. |
+| `max_output_tokens`, `temperature` | Validated, then ignored. |
+| Anything else (`reasoning`, `text`, `store`, …) | Accepted and ignored. |
+
+Content parts other than `{"type": "text"}`, including the Responses-style `input_text` and
+`input_image`, fail validation with `400 request_validation_error`.
+
+The response has `object: "response"`, `status: "completed"`, one assistant `message` item with an
+`output_text` part, a top-level `output_text`, `usage` with `input_tokens`/`output_tokens`/
+`total_tokens`, and `gateway_session_id`.
 
 ## Python OpenAI client
 
@@ -117,9 +219,11 @@ print(response.choices[0].message.content)
 
 ## Sessions
 
-Every successful request creates a gateway UUID and returns it in both the
-`X-Gateway-Session` response header and the `gateway_session_id` response field. Continue a
-provider thread by sending the header back:
+Each new conversation gets a gateway session ID, a UUID. It is returned in the
+`X-Gateway-Session` header, and in the body as `gateway_session_id` (chat, Responses) or
+`session_id` (agents). Continue the provider thread by sending it back, either as the header or
+as `gateway_session_id` in the body. If you send both, they must match; otherwise the request
+fails with `conflicting_session_ids`.
 
 ```bash
 curl http://127.0.0.1:11435/v1/chat/completions \
@@ -132,19 +236,45 @@ curl http://127.0.0.1:11435/v1/chat/completions \
   }'
 ```
 
-Codex is resumed with `codex exec resume <thread-id>` and Claude with `--resume <session-id>` when
-the runtime returned a session identifier. Sessions are pinned to their provider: cross-provider
-fallback is intentionally disabled on continuation to prevent incoherent context.
+```mermaid
+sequenceDiagram
+    participant App
+    participant GW as Gateway
+    participant CLI as Provider CLI
+    App->>GW: request (no session)
+    GW->>CLI: new run
+    CLI-->>GW: answer + thread/session id
+    GW-->>App: answer, X-Gateway-Session: S
+    App->>GW: request, X-Gateway-Session: S (new turns only)
+    GW->>CLI: resume thread (same provider, no fallback)
+    CLI-->>GW: answer
+    GW-->>App: answer, X-Gateway-Session: S
+```
 
-Non-streaming responses also carry `X-Gateway-Provider` and `X-Gateway-Model` headers naming the
-provider and model that actually ran, which is worth checking when `subscription/auto` may have
-fallen back. Streaming responses return `X-Gateway-Session` only because fallback can select the
-provider after the SSE headers have already been committed.
+How continuation works:
 
-Sessions are also bound to their API type. An agent session cannot be resumed through chat, and
-its resolved working directory and permission level cannot change. Requests that continue the
-same session are serialized. Inactive session metadata is retained for 30 days by default; see
-[configuration](configuration.md#configyaml-reference).
+- Codex resumes with `codex exec resume <thread-id>`, and Claude with `--resume <session-id>`,
+  when the runtime returned an ID. A continuation returns the same gateway session ID.
+- The provider thread already holds the earlier turns. The gateway still sends every message in
+  the request, so send **only the new turns** when continuing, or the context is duplicated.
+- Sessions are pinned to their provider. Cross-provider fallback is disabled on continuation to
+  prevent incoherent context.
+- The model cannot change. Send the session's original model or `subscription/auto`. Anything else
+  fails with `session_model_mismatch`.
+- Sessions are also bound to their API type. An agent session cannot be resumed through chat, and
+  its resolved working directory and permission level cannot change. Violations fail with
+  `session_context_mismatch`.
+- Requests that continue the same session run one at a time, in order.
+- An unknown ID fails with `404 session_not_found`. Sessions unused for 30 days are deleted at
+  startup and then at most hourly; see
+  [configuration](configuration.md#storage).
+
+Non-streaming responses also carry:
+
+| Header | Value |
+| --- | --- |
+| `X-Gateway-Provider` | The provider that ran: `codex` or `claude`. Check it when `subscription/auto` or a fallback may have switched providers. |
+| `X-Gateway-Model` | The alias of the model that ran (for a fallback, the other provider's default alias). On a continued session, the model the session was started with. |
 
 ### Role handling
 
@@ -152,6 +282,10 @@ Messages use deterministic role markers (`[SYSTEM]`, `[DEVELOPER]`, `[USER]`, `[
 Those markers preserve ordering, but provider runtimes may still add their own instructions,
 tools, agent loops, filesystem context, permission handling, compaction, and model-specific
 behavior. OpenAI `system` and `developer` roles therefore cannot be reproduced exactly.
+
+The whole conversation goes to the CLI as one command-line argument. Very long conversations can
+exceed the operating system's argument-size limit (about 128 KiB on Linux), and the request then
+fails.
 
 ## Agent endpoint
 
@@ -169,17 +303,45 @@ curl http://127.0.0.1:11435/v1/agents/run \
   }'
 ```
 
-Only `read-only` and `workspace-write` are accepted. The endpoint requires a configured gateway
-API key even when the server listens only on loopback. `cwd` must exist, resolve without symlink
-escape, and be inside `agent.allowed_directories` unless the user explicitly enables the broader
-configuration.
+```json
+{
+  "id": "agent_…",
+  "model": "claude-code/sonnet",
+  "status": "completed",
+  "output": "…",
+  "session_id": "6f1c…",
+  "provider": "claude"
+}
+```
 
-Agent execution currently uses Claude Code 2.1.248 or newer with `--restricted`. Read-only runs
-receive only `Read`, `Glob`, and `Grep`; workspace-write adds `Edit` and `Write`. Shell and command
-tools are not exposed. Codex models return `unsupported_provider_capability` on this endpoint
-because Codex's CLI sandbox does not confine read access to the requested directory. Write-capable
-fallback requires both request-level `fallback: true` and
-`agent.allow_write_fallback: true`.
+| Field | Handling |
+| --- | --- |
+| `model` | Required. A `claude-code/*` model, or `subscription/auto`, which picks Claude. |
+| `prompt` | Required. The task. |
+| `cwd` | Required. Must exist, be a directory, and resolve (after following symlinks) inside `agent.allowed_directories`, unless `agent.allow_outside_directories` is `true`. A relative path is resolved against the gateway's own working directory. |
+| `permissions` | `read-only` (default) or `workspace-write`. |
+| `gateway_session_id` | Continue an agent session; the header works too. |
+| `fallback` | Defaults to `false`. Writes fall back only with `fallback: true` **and** `agent.allow_write_fallback: true`. Claude is currently the only agent-capable provider, so there is nothing to fall back to yet. |
+
+Unknown fields are rejected, and the endpoint does not stream. A missing gateway key, or a `cwd`
+that is missing, not a directory, or outside the allowed roots, fails with
+`403 agent_permission_error`.
+
+What the agent can do:
+
+| `permissions` | Claude tools | Permission mode |
+| --- | --- | --- |
+| `read-only` | `Read`, `Glob`, `Grep` | `plan` |
+| `workspace-write` | `Read`, `Glob`, `Grep`, `Edit`, `Write` | `acceptEdits` |
+
+Every agent run uses `--restricted --strict-mcp-config --safe-mode`, with the tool list passed
+to both `--tools` and `--allowedTools`. Shell and command tools are never exposed.
+
+Agent runs need Claude Code 2.1.248 or newer for these flags. The Docker image pins 2.1.251. The
+gateway does not check the version, so an older native CLI fails at run time with a provider error.
+
+Codex models return `400 unsupported_provider_capability` on this endpoint, because Codex's CLI
+sandbox does not confine read access to the requested directory.
 
 In Docker, use the **container** path rather than the host path:
 
@@ -189,3 +351,42 @@ In Docker, use the **container** path rather than the host path:
   "permissions": "workspace-write"
 }
 ```
+
+## Errors
+
+Every error uses the OpenAI-style shape:
+
+```json
+{"error": {"message": "…", "type": "provider_timeout", "code": "provider_timeout", "provider": "codex"}}
+```
+
+`provider` is present when a specific provider failed. `request_validation_error` adds a
+`details` list from the request validator.
+
+"May fall back" means a new, non-session request can move to the next provider when
+[fallback](models-and-routing.md#routing-fallback-and-queuing) is enabled.
+
+| `code` | `type` | HTTP | May fall back | When |
+| --- | --- | --- | --- | --- |
+| `request_validation_error` | `invalid_request` | 400 | — | The body does not match the schema |
+| `unsupported_feature` | `invalid_request` | 400 | — | `tools`, `tool_choice`, or `previous_response_id` |
+| `conflicting_session_ids` | `invalid_request` | 400 | — | Header and body session IDs differ |
+| `session_model_mismatch` | `invalid_request` | 400 | — | Continuing a session with a different model |
+| `session_context_mismatch` | `invalid_request` | 400 | — | Continuing a session with a different API type, `cwd`, or permissions |
+| `unsupported_provider_capability` | `invalid_request` | 400 | — | A Codex model on the agent endpoint |
+| `invalid_model_name` | `invalid_request` | 400 | — | A stored session's model fails the name rules |
+| `invalid_api_key` | `authentication_error` | 401 | — | Missing or wrong gateway key |
+| `agent_permission_error` | `agent_permission_error` | 403 | — | No gateway key configured, or `cwd` rejected |
+| `model_not_available` | `model_not_available` | 404 | `subscription/auto` only | Unknown name, or the CLI or plan rejects the model |
+| `session_not_found` | `session_not_found` | 404 | — | Unknown or deleted session ID |
+| `provider_usage_limit` | `provider_usage_limit` | 429 | yes | The plan's usage or rate limit was hit |
+| `provider_execution_failed` | `provider_protocol_error` | 502 | yes | The CLI failed for another reason |
+| `provider_malformed_output` | `provider_protocol_error` | 502 | yes | The CLI printed output the gateway cannot parse |
+| `provider_missing_output` | `provider_protocol_error` | 502 | yes | The CLI finished without an answer |
+| `provider_unavailable` | `provider_unavailable` | 503 | yes | Not installed, disabled, failed to start, or `working_directory` missing |
+| `provider_temporary_error` | `provider_unavailable` | 503 | yes | The provider reported an overload or temporary outage |
+| `provider_not_authenticated` | `provider_not_authenticated` | 503 | yes¹ | The CLI is not signed in |
+| `provider_timeout` | `provider_timeout` | 504 | yes | The run exceeded `timeout_seconds` |
+
+¹ Falls back when the pre-run login check detects it. Not when the CLI itself reports it during a
+run.
