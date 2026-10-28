@@ -18,3 +18,13 @@ def test_prompt_conversion_preserves_role_markers() -> None:
         "[USER]\nQuestion\n\n"
         "[ASSISTANT]\nPrior answer"
     )
+
+
+def test_prompt_conversion_renders_responses_text_parts() -> None:
+    prompt = messages_to_prompt(
+        [
+            {"role": "user", "content": [{"type": "input_text", "text": "Question"}]},
+            {"role": "assistant", "content": [{"type": "output_text", "text": "Answer"}]},
+        ]
+    )
+    assert prompt == "[USER]\nQuestion\n\n[ASSISTANT]\nAnswer"

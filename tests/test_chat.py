@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from conftest import FakeProvider
 from fastapi.testclient import TestClient
 
+from subscription_gateway.compat.openai_chat import messages_to_prompt
 from subscription_gateway.config import GatewayConfig
 from subscription_gateway.errors import ProviderError
 from subscription_gateway.main import create_app
@@ -203,6 +204,51 @@ def test_responses_instructions_become_a_developer_message(
     assert messages[0] == {"role": "developer", "content": "Be terse."}
     assert messages[1]["role"] == "user"
     assert messages[1]["content"] == "Hello"
+
+
+def test_responses_accepts_input_and_output_text_parts(
+    client: TestClient, fake_codex: FakeProvider
+) -> None:
+    response = client.post(
+        "/v1/responses",
+        json={
+            "model": "codex/gpt-5.6-sol",
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello"}],
+                },
+                {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hi", "annotations": []}],
+                },
+                {"role": "user", "content": [{"type": "input_text", "text": "Again"}]},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    prompt = messages_to_prompt(fake_codex.calls[0]["messages"])
+    assert prompt == "[USER]\nHello\n\n[ASSISTANT]\nHi\n\n[USER]\nAgain"
+
+
+def test_responses_rejects_image_parts(client: TestClient) -> None:
+    response = client.post(
+        "/v1/responses",
+        json={
+            "model": "codex/gpt-5.6-sol",
+            "input": [
+                {
+                    "role": "user",
+                    "content": [{"type": "input_image", "image_url": "https://example.com/x.png"}],
+                }
+            ],
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "request_validation_error"
 
 
 def test_invalid_model_is_normalized(client: TestClient) -> None:
