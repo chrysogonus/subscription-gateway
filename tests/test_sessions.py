@@ -104,6 +104,30 @@ async def test_expired_sessions_are_deleted(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("retention_days", "resumable"), [(30, False), (None, True)])
+async def test_an_expired_session_cannot_be_resumed_before_cleanup(
+    tmp_path: Path, retention_days: int | None, resumable: bool
+) -> None:
+    storage = SQLiteSessionStorage(tmp_path / "sessions.db")
+    await storage.initialize()
+    manager = SessionManager(storage, session_retention_days=retention_days)
+    session = await manager.create(
+        provider="codex",
+        model="codex/gpt-5.6-sol",
+        provider_model="gpt-5.6-sol",
+    )
+    await storage.put(session.model_copy(update={"last_used_at": utc_now() - timedelta(days=31)}))
+
+    if resumable:
+        assert (await manager.require(session.gateway_session_id)) is not None
+    else:
+        with pytest.raises(GatewayError) as caught:
+            await manager.require(session.gateway_session_id)
+        assert caught.value.code == "session_not_found"
+    await storage.close()
+
+
+@pytest.mark.asyncio
 async def test_same_session_operations_are_serialized(tmp_path: Path) -> None:
     storage = SQLiteSessionStorage(tmp_path / "sessions.db")
     manager = SessionManager(storage)

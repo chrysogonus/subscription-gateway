@@ -141,7 +141,7 @@ Settings for [`POST /v1/agents/run`](api.md#agent-endpoint).
 | Key | Meaning |
 | --- | --- |
 | `sqlite_path` | Session metadata database (`~` is expanded). `":memory:"` keeps sessions only until the process exits. |
-| `session_retention_days` | Sessions unused for this many days are deleted at startup and then at most hourly. `null` keeps them indefinitely. |
+| `session_retention_days` | Sessions unused for this many days can no longer be resumed, and are deleted at startup and then at most hourly. `null` keeps them indefinitely. |
 
 ### logging
 

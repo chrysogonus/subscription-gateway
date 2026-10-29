@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An expired session can no longer be resumed. Until the next cleanup, which runs at most
+  hourly, a session past `storage.session_retention_days` was still accepted; it now fails
+  with `session_not_found`.
 - Agent runs on a Claude Code older than 2.1.248 are refused up front with
   `unsupported_provider_capability` and a message naming both versions. Before, the gateway
   started the old CLI anyway, and the run failed with whatever error the CLI produced.
