@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 
 from subscription_gateway.config import GatewayConfig
@@ -43,6 +44,8 @@ class ProviderRegistry:
             "codex": CodexProvider(config.providers.codex),
             "claude": ClaudeProvider(config.providers.claude),
         }
+        self._statuses: tuple[float, list[ProviderStatus]] | None = None
+        self._statuses_lock = asyncio.Lock()
 
     def get(self, name: str) -> Provider | None:
         return self.providers.get(name)
@@ -96,6 +99,20 @@ class ProviderRegistry:
         return models
 
     async def statuses(self) -> list[ProviderStatus]:
+        """Provider readiness, cached for 10 seconds like `is_available`.
+
+        Each refresh runs every provider's login check, and `/ready` is unauthenticated, so
+        repeated or concurrent calls share one refresh instead of each spawning processes.
+        """
+
+        async with self._statuses_lock:
+            if self._statuses is None or time.monotonic() - self._statuses[0] >= 10.0:
+                # Stamp after the checks finish, or a slow refresh is stored already expired.
+                statuses = await self._inspect_all()
+                self._statuses = (time.monotonic(), statuses)
+            return list(self._statuses[1])
+
+    async def _inspect_all(self) -> list[ProviderStatus]:
         async def inspect(name: str, provider: Provider) -> ProviderStatus:
             installed = provider.is_installed()
             authenticated = await provider.is_authenticated() if installed else False

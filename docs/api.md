@@ -40,8 +40,10 @@ curl http://127.0.0.1:11435/ready
 }
 ```
 
-`status` is `not_ready`, with HTTP 503, when no provider is available. Each call runs
-`codex login status` and `claude auth status`.
+`status` is `not_ready`, with HTTP 503, when no provider is available. The result comes from
+`codex login status` and `claude auth status`, cached for 10 seconds and shared by concurrent
+calls, so polling `/ready` does not start a process per request. A login change shows up within
+10 seconds.
 
 ## Models
 
