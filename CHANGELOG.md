@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `doctor` reports whether the installed Claude Code is new enough for `/v1/agents/run`
+  (2.1.248 or newer).
+
 ### Fixed
 
+- Agent runs on a Claude Code older than 2.1.248 are refused up front with
+  `unsupported_provider_capability` and a message naming both versions. Before, the gateway
+  started the old CLI anyway, and the run failed with whatever error the CLI produced.
 - `X-Gateway-Model` on a continued session names the model that runs. It used to repeat the
   model the session was started with, so a `subscription/auto` session reported
   `subscription/auto`, and a session that fell back from `codex/gpt-5.6-sol` to Claude kept

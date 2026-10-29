@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import time
 from pathlib import Path
@@ -25,6 +26,13 @@ from subscription_gateway.providers.process import (
     run_process,
 )
 
+# Agent runs pass --restricted and --strict-mcp-config, documented as needing this release.
+MIN_AGENT_VERSION = (2, 1, 248)
+
+
+def format_version(version: tuple[int, ...]) -> str:
+    return ".".join(map(str, version))
+
 
 class ClaudeProvider(Provider):
     name = "claude"
@@ -42,6 +50,7 @@ class ClaudeProvider(Provider):
         self.settings = settings
         self._executable = shutil.which(settings.command)
         self._availability: tuple[float, bool] | None = None
+        self._version: tuple[int, ...] | None = None
 
     def is_installed(self) -> bool:
         return self._executable is not None
@@ -72,6 +81,24 @@ class ClaudeProvider(Provider):
             and status.get("apiProvider", "firstParty") == "firstParty"
         )
         return bool(status.get("loggedIn"))
+
+    async def version(self) -> tuple[int, ...] | None:
+        """The installed CLI's version, or None when it cannot be determined."""
+
+        # shortcut: cached for the process lifetime, so a CLI upgrade needs a gateway restart.
+        if self._version is None and self._executable:
+            try:
+                result = await run_process(
+                    [self._executable, "--version"],
+                    cwd=self._working_directory(),
+                    timeout_seconds=min(10.0, self.settings.timeout_seconds),
+                )
+            except (OSError, TimeoutError):
+                return None
+            match = re.search(r"(\d+)\.(\d+)\.(\d+)", result.stdout)
+            if result.returncode == 0 and match:
+                self._version = tuple(int(part) for part in match.groups())
+        return self._version
 
     async def is_available(self) -> bool:
         now = time.monotonic()
@@ -174,6 +201,15 @@ class ClaudeProvider(Provider):
                 provider=self.name,
                 retryable=True,
             )
+        if options.get("agent_task"):
+            version = await self.version()
+            # An unknown version runs anyway: a failed probe should not block a working CLI.
+            if version is not None and version < MIN_AGENT_VERSION:
+                raise invalid_request(
+                    f"Claude Code {format_version(version)} cannot run agent tasks; "
+                    f"{format_version(MIN_AGENT_VERSION)} or newer is required.",
+                    code="unsupported_provider_capability",
+                )
         permissions = str(options.get("permissions", "read-only"))
         if permissions not in {"read-only", "workspace-write"}:
             permissions = "read-only"

@@ -190,3 +190,85 @@ async def test_claude_auth_status_reports_the_auth_method(
     monkeypatch.setattr(claude_module, "run_process", auth_status)
     assert await provider.is_authenticated()
     assert provider.subscription_auth is subscription
+
+
+def version_aware_process(version_output: str) -> tuple[list[list[str]], Any]:
+    calls: list[list[str]] = []
+
+    async def fake_run_process(command: list[str], **kwargs: Any) -> ProcessResult:
+        calls.append(command)
+        if command[1:] == ["--version"]:
+            return ProcessResult(0, version_output, "")
+        return ProcessResult(0, json.dumps({"result": "done", "session_id": "s"}), "")
+
+    return calls, fake_run_process
+
+
+@pytest.mark.asyncio
+async def test_claude_version_is_parsed_and_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls, fake_run_process = version_aware_process("2.1.312 (Claude Code)\n")
+    monkeypatch.setattr(claude_module, "run_process", fake_run_process)
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+
+    assert await provider.version() == (2, 1, 312)
+    assert await provider.version() == (2, 1, 312)
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_claude_version_is_unknown_when_unparseable(monkeypatch: pytest.MonkeyPatch) -> None:
+    _, fake_run_process = version_aware_process("Claude Code\n")
+    monkeypatch.setattr(claude_module, "run_process", fake_run_process)
+
+    assert await ClaudeProvider(ClaudeSettings(command="/bin/echo")).version() is None
+
+
+@pytest.mark.asyncio
+async def test_claude_agent_run_refuses_an_old_cli(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls, fake_run_process = version_aware_process("2.1.200 (Claude Code)\n")
+    monkeypatch.setattr(claude_module, "run_process", fake_run_process)
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+
+    with pytest.raises(GatewayError) as caught:
+        await provider.send(
+            None,
+            "opus",
+            [{"role": "user", "content": "hi"}],
+            {"agent_task": True, "cwd": str(tmp_path)},
+        )
+
+    assert caught.value.code == "unsupported_provider_capability"
+    assert caught.value.status_code == 400
+    assert "2.1.200" in caught.value.message
+    assert "2.1.248" in caught.value.message
+    assert not isinstance(caught.value, ProviderError)  # never falls back
+    assert calls == [["/bin/echo", "--version"]]  # the agent itself never started
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("version_output", "agent_task"),
+    [
+        ("2.1.248 (Claude Code)\n", True),
+        ("unparseable\n", True),  # an unknown version is not blocked
+        ("2.1.200 (Claude Code)\n", False),  # chat does not need the agent flags
+    ],
+)
+async def test_claude_runs_when_the_version_allows_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, version_output: str, agent_task: bool
+) -> None:
+    calls, fake_run_process = version_aware_process(version_output)
+    monkeypatch.setattr(claude_module, "run_process", fake_run_process)
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+
+    response = await provider.send(
+        None,
+        "opus",
+        [{"role": "user", "content": "hi"}],
+        {"agent_task": agent_task, "cwd": str(tmp_path)},
+    )
+
+    assert response.text == "done"
+    assert ("--restricted" in calls[-1]) is agent_task
