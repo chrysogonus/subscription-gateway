@@ -57,8 +57,8 @@ authentication bypass when `GATEWAY_API_KEY` is set.
 
 Gateway sessions record their API type, resolved working directory, and permission level. Those
 attributes cannot change on continuation, and requests for the same session are serialized so
-provider thread state cannot race. Metadata unused for 30 days (by default) is deleted at
-startup and then at most hourly.
+provider thread state cannot race. A session unused for 30 days (by default) can no longer be
+resumed, and its metadata is deleted at startup and then at most hourly.
 
 ## What this project never does
 

@@ -35,6 +35,10 @@ class SessionManager:
         session = await self.storage.get(gateway_session_id)
         if session is None:
             raise session_not_found(gateway_session_id)
+        # Expired rows linger until the next cleanup; they must not be resumable meanwhile.
+        days = self.session_retention_days
+        if days is not None and session.last_used_at < utc_now() - timedelta(days=days):
+            raise session_not_found(gateway_session_id)
         return session
 
     async def require_compatible(

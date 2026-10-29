@@ -266,9 +266,8 @@ How continuation works:
   its resolved working directory and permission level cannot change. Violations fail with
   `session_context_mismatch`.
 - Requests that continue the same session run one at a time, in order.
-- An unknown ID fails with `404 session_not_found`. Sessions unused for 30 days are deleted at
-  startup and then at most hourly; see
-  [configuration](configuration.md#storage).
+- An unknown or expired ID fails with `404 session_not_found`. By default a session expires
+  after 30 days without use; see [configuration](configuration.md#storage).
 
 Non-streaming responses also carry:
 
