@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `docs/overview.md`, a five-minute visual tour of the gateway with a talk track, linked from
+  the README and the documentation index.
+
 ## [0.2.2] - 2026-10-29
 
 ### Added
