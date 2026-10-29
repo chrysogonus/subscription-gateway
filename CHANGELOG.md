@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Docker now bundles Codex 0.163.0, which serves models that 0.150.1 rejected, such as
   `gpt-6-luna`.
+- The README is rewritten as a visual landing page, and the guides in `docs/` now match the
+  current behavior. They add a full `config.yaml` key reference, a CLI and `doctor` reference,
+  request field tables, an error-code table, the Compose variables, and the pinned client
+  versions. They also correct earlier statements: explicit models can fall back on retryable
+  errors, Compose also forces `GATEWAY_ALLOW_REMOTE`, sampling fields are always ignored, and
+  the Quickstart uses `make doctor`/`make serve`, because `make install` does not put the
+  command on `PATH`.
 
 ### Fixed
 

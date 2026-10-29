@@ -5,11 +5,11 @@ Reference material for Subscription LLM Gateway. Start at the
 
 | Guide | What it covers |
 | --- | --- |
-| [Configuration](configuration.md) | `config.yaml` reference, environment overrides, local API authentication |
-| [API](api.md) | Endpoints, `curl` and Python examples, streaming behavior, sessions, the agent endpoint |
-| [Models and routing](models-and-routing.md) | Catalogued vs. passthrough models, name validation, routing, fallback, scheduling |
-| [Docker](docker.md) | The image, Compose stack, credential mounts, optional OpenWebUI |
-| [Architecture](architecture.md) | Provider adapters, platform support, development workflow, `make` targets |
+| [Configuration](configuration.md) | `config.yaml` reference, validation rules, environment overrides, CLI commands and `doctor` checks, local API authentication, logging |
+| [API](api.md) | Endpoints, request and response fields, `curl` and Python examples, streaming, sessions, the agent endpoint, error codes |
+| [Models and routing](models-and-routing.md) | Catalogued vs. passthrough models, name validation, routing, fallback, queuing |
+| [Docker](docker.md) | The image and pinned versions, Compose variables and stack, credential mounts, optional OpenWebUI |
+| [Architecture](architecture.md) | Package layout, provider command lines, platform support, development workflow, `make` targets |
 
 Other things worth reading:
 
