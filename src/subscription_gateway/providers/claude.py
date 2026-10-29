@@ -125,7 +125,6 @@ class ClaudeProvider(Provider):
         *,
         session_id: str | None,
         model: str,
-        prompt: str,
         permissions: str,
         agent_task: bool,
     ) -> list[str]:
@@ -182,7 +181,7 @@ class ClaudeProvider(Provider):
                 )
         else:
             command.extend(["--tools", "", "--permission-mode", "plan"])
-        command.append(prompt)
+        # No prompt argument: --print reads it from stdin, which has no 128 KiB argv cap.
         return command
 
     async def send(
@@ -216,7 +215,6 @@ class ClaudeProvider(Provider):
         command = self.build_command(
             session_id=session_id,
             model=model,
-            prompt=messages_to_prompt(messages),
             permissions=permissions,
             agent_task=bool(options.get("agent_task")),
         )
@@ -225,6 +223,7 @@ class ClaudeProvider(Provider):
                 command,
                 cwd=self._working_directory(options),
                 timeout_seconds=self.settings.timeout_seconds,
+                stdin_text=messages_to_prompt(messages),
             )
         except TimeoutError as exc:
             raise ProviderError(

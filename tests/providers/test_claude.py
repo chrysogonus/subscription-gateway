@@ -70,12 +70,11 @@ def test_claude_command_disables_tools_for_chat() -> None:
     command = provider.build_command(
         session_id=None,
         model="opus",
-        prompt="hello && touch /tmp/nope",
         permissions="read-only",
         agent_task=False,
     )
     assert command[0] == "/bin/echo"
-    assert command[-1] == "hello && touch /tmp/nope"
+    assert command[-2:] == ["--permission-mode", "plan"]  # no prompt argument: it goes on stdin
     assert "--safe-mode" in command
     assert command[command.index("--tools") + 1] == ""
     assert "--print" in command
@@ -86,7 +85,6 @@ def test_claude_command_resumes_session() -> None:
     command = provider.build_command(
         session_id="42c5f7a2-98bf-4f0a-b86f-53ad6d42e059",
         model="opus",
-        prompt="continue",
         permissions="read-only",
         agent_task=True,
     )
@@ -102,7 +100,6 @@ def test_claude_write_agent_is_restricted_to_file_tools() -> None:
     command = provider.build_command(
         session_id=None,
         model="opus",
-        prompt="edit",
         permissions="workspace-write",
         agent_task=True,
     )
@@ -135,7 +132,6 @@ def test_claude_command_rejects_invalid_permissions() -> None:
         provider.build_command(
             session_id=None,
             model="opus",
-            prompt="hi",
             permissions="bypassPermissions",
             agent_task=True,
         )
@@ -150,7 +146,6 @@ def test_claude_command_rejects_flag_like_model() -> None:
         provider.build_command(
             session_id=None,
             model="--dangerously-skip-permissions",
-            prompt="hi",
             permissions="read-only",
             agent_task=False,
         )
@@ -163,7 +158,6 @@ def test_claude_command_accepts_full_model_name() -> None:
     command = provider.build_command(
         session_id=None,
         model="claude-fable-5",
-        prompt="hi",
         permissions="read-only",
         agent_task=False,
     )
@@ -272,3 +266,33 @@ async def test_claude_runs_when_the_version_allows_it(
 
     assert response.text == "done"
     assert ("--restricted" in calls[-1]) is agent_task
+
+
+# Far over the 128 KiB Linux limit on one argv string, which used to break long chats.
+LONG_MESSAGE = "x" * (300 * 1024)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("agent_task", [False, True])
+async def test_claude_sends_the_prompt_on_stdin(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, agent_task: bool
+) -> None:
+    calls, fake_run_process = version_aware_process("2.1.312 (Claude Code)\n")
+    stdin: list[str | None] = []
+
+    async def recording_run_process(command: list[str], **kwargs: Any) -> ProcessResult:
+        stdin.append(kwargs.get("stdin_text"))
+        result: ProcessResult = await fake_run_process(command, **kwargs)
+        return result
+
+    monkeypatch.setattr(claude_module, "run_process", recording_run_process)
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+    await provider.send(
+        None,
+        "opus",
+        [{"role": "user", "content": LONG_MESSAGE}],
+        {"agent_task": agent_task, "cwd": str(tmp_path)},
+    )
+
+    assert stdin[-1] == f"[USER]\n{LONG_MESSAGE}"
+    assert all(LONG_MESSAGE not in part for part in calls[-1])

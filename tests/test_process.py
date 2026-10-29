@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from subscription_gateway.errors import GatewayError, ProviderError
 from subscription_gateway.providers.process import classify_provider_failure, run_process
 
 pytestmark = pytest.mark.skipif(
@@ -75,6 +76,36 @@ async def test_run_process_returns_streams_and_exit_code(tmp_path: Path) -> None
     assert result.returncode == 0
     assert result.stdout.strip() == "out"
     assert result.stderr.strip() == "err"
+
+
+async def test_run_process_writes_stdin_text_beyond_the_argv_limit(tmp_path: Path) -> None:
+    text = "ä" * (200 * 1024)  # 400 KiB of UTF-8, over Linux's 128 KiB cap on one argv string
+
+    result = await run_process(
+        [sys.executable, "-c", "import sys; sys.stdout.write(sys.stdin.read())"],
+        cwd=tmp_path,
+        timeout_seconds=30,
+        stdin_text=text,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == text
+
+
+async def test_run_process_rejects_invalid_unicode_before_spawning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def must_not_spawn(*args: object, **kwargs: object) -> None:
+        raise AssertionError("a subprocess was started")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", must_not_spawn)
+
+    with pytest.raises(GatewayError) as caught:
+        await run_process(["cat"], cwd=tmp_path, timeout_seconds=30, stdin_text="hi \ud800")
+
+    assert caught.value.status_code == 400
+    assert caught.value.code == "request_validation_error"
+    assert not isinstance(caught.value, ProviderError)  # never falls back
 
 
 async def test_run_process_reports_a_failing_exit_code(tmp_path: Path) -> None:

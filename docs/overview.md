@@ -210,7 +210,6 @@ By design:
 
 Still open (from the documentation audit):
 
-- The whole conversation is one command-line argument, so very long chats fail at about 128 KiB.
 - The agent endpoint's `fallback` option does nothing yet; Claude is the only agent provider.
 - `doctor` reports the port as in use while the gateway itself is running.
 - `provider_not_authenticated` falls back or not depending on where it is detected.

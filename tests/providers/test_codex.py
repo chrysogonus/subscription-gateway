@@ -70,23 +70,21 @@ def test_codex_command_is_argument_array_and_resume_aware() -> None:
     initial = provider.build_command(
         session_id=None,
         model="gpt-5.6-sol",
-        prompt="user data; $(whoami)",
         permissions="read-only",
     )
     resumed = provider.build_command(
         session_id="thread-123",
         model="gpt-5.6-sol",
-        prompt="continue",
         permissions="workspace-write",
     )
     assert initial[0] == "/bin/echo"
-    assert initial[-1] == "user data; $(whoami)"
+    assert initial[-1] == "-"  # the prompt is read from stdin
     assert "--ignore-user-config" in initial
     assert initial[initial.index("--sandbox") + 1] == "read-only"
     assert resumed[1:3] == ["exec", "resume"]
     assert "--ignore-user-config" in resumed
     assert 'sandbox_mode="workspace-write"' in resumed
-    assert "thread-123" in resumed
+    assert resumed[-2:] == ["thread-123", "-"]
 
 
 def test_codex_is_not_exposed_as_a_filesystem_agent() -> None:
@@ -117,7 +115,6 @@ def test_codex_command_rejects_invalid_permissions() -> None:
         provider.build_command(
             session_id="thread-123",
             model="gpt-5.6-sol",
-            prompt="hi",
             permissions='read-only"; sandbox_mode="danger-full-access',
         )
     assert caught.value.code == "invalid_permissions"
@@ -131,7 +128,6 @@ def test_codex_command_rejects_flag_like_model() -> None:
         provider.build_command(
             session_id=None,
             model="--sandbox",
-            prompt="hi",
             permissions="read-only",
         )
     assert caught.value.code == "invalid_model_name"
@@ -143,7 +139,6 @@ def test_codex_command_accepts_dotted_model() -> None:
     command = provider.build_command(
         session_id=None,
         model="us.openai.gpt-5.6-sol",
-        prompt="hi",
         permissions="read-only",
     )
     assert command[command.index("--model") + 1] == "us.openai.gpt-5.6-sol"
@@ -184,3 +179,33 @@ async def test_codex_login_status_reports_the_auth_method(
     monkeypatch.setattr(codex_module, "run_process", status)
     assert await provider.is_authenticated()
     assert provider.subscription_auth is subscription
+
+
+# Far over the 128 KiB Linux limit on one argv string, which used to break long chats.
+LONG_MESSAGE = "x" * (300 * 1024)
+
+
+@pytest.mark.asyncio
+async def test_codex_sends_the_prompt_on_stdin(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    async def fake_run_process(command: list[str], **kwargs: Any) -> ProcessResult:
+        calls.append({"command": command, **kwargs})
+        events = [
+            {"type": "thread.started", "thread_id": "t"},
+            {"type": "item.completed", "item": {"type": "agent_message", "text": "done"}},
+        ]
+        return ProcessResult(0, "\n".join(json.dumps(event) for event in events), "")
+
+    monkeypatch.setattr(codex_module, "run_process", fake_run_process)
+    provider = CodexProvider(CodexSettings(command="/bin/echo", working_directory=tmp_path))
+    response = await provider.send(
+        None, "gpt-5.6-sol", [{"role": "user", "content": LONG_MESSAGE}], {}
+    )
+
+    assert response.text == "done"
+    assert calls[0]["stdin_text"] == f"[USER]\n{LONG_MESSAGE}"
+    assert calls[0]["command"][-1] == "-"
+    assert all(LONG_MESSAGE not in part for part in calls[0]["command"])

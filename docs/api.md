@@ -285,9 +285,9 @@ Those markers preserve ordering, but provider runtimes may still add their own i
 tools, agent loops, filesystem context, permission handling, compaction, and model-specific
 behavior. OpenAI `system` and `developer` roles therefore cannot be reproduced exactly.
 
-The whole conversation goes to the CLI as one command-line argument. Very long conversations can
-exceed the operating system's argument-size limit (about 128 KiB on Linux), and the request then
-fails.
+The rendered conversation goes to the CLI on its standard input, not as a command-line argument,
+so long conversations are not limited by the operating system's argument size. Each run is still
+bounded by `timeout_seconds` and by the model's own context window.
 
 ## Agent endpoint
 
@@ -373,7 +373,7 @@ Every error uses the OpenAI-style shape:
 
 | `code` | `type` | HTTP | May fall back | When |
 | --- | --- | --- | --- | --- |
-| `request_validation_error` | `invalid_request` | 400 | — | The body does not match the schema |
+| `request_validation_error` | `invalid_request` | 400 | — | The body does not match the schema, or its text is not valid Unicode (an unpaired surrogate) |
 | `unsupported_feature` | `invalid_request` | 400 | — | `tools`, `tool_choice`, or `previous_response_id` |
 | `conflicting_session_ids` | `invalid_request` | 400 | — | Header and body session IDs differ |
 | `session_model_mismatch` | `invalid_request` | 400 | — | Continuing a session with a different model |

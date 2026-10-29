@@ -43,15 +43,17 @@ flowchart TB
 ## Provider implementation notes
 
 Both adapters build argument arrays and run them without a shell. The model name is checked
-against the strict name pattern again just before each run, and the rendered conversation is the
-last argument.
+against the strict name pattern again just before each run. The rendered conversation is written to
+the CLI's standard input (`-` tells Codex to read it; Claude's `--print` reads it by default), so
+prompt text never appears in the argument list, and its size is not capped by Linux's 128 KiB
+limit on one argument.
 
 | Run | Command line |
 | --- | --- |
-| Codex chat, new | `codex exec --json --color never --model M --ignore-user-config --sandbox read-only --skip-git-repo-check PROMPT` |
-| Codex chat, resume | `codex exec resume --json --model M --ignore-user-config --skip-git-repo-check -c sandbox_mode="read-only" THREAD_ID PROMPT` |
-| Claude chat | `claude --print --output-format json --safe-mode --model M [--resume ID] --tools "" --permission-mode plan PROMPT` |
-| Claude agent | `claude --print --output-format json --safe-mode --model M [--resume ID] --restricted --strict-mcp-config --tools T --allowedTools T --permission-mode plan\|acceptEdits PROMPT` |
+| Codex chat, new | `codex exec --json --color never --model M --ignore-user-config --sandbox read-only --skip-git-repo-check -` |
+| Codex chat, resume | `codex exec resume --json --model M --ignore-user-config --skip-git-repo-check -c sandbox_mode="read-only" THREAD_ID -` |
+| Claude chat | `claude --print --output-format json --safe-mode --model M [--resume ID] --tools "" --permission-mode plan` |
+| Claude agent | `claude --print --output-format json --safe-mode --model M [--resume ID] --restricted --strict-mcp-config --tools T --allowedTools T --permission-mode plan\|acceptEdits` |
 | Login checks | `codex login status`, `claude auth status` |
 
 The Codex adapter uses the official documented `codex exec --json` JSONL interface. It reads the

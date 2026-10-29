@@ -86,7 +86,6 @@ class CodexProvider(Provider):
         *,
         session_id: str | None,
         model: str,
-        prompt: str,
         permissions: str,
     ) -> list[str]:
         if not self._executable:
@@ -116,7 +115,7 @@ class CodexProvider(Provider):
                 "-c",
                 f'sandbox_mode="{permissions}"',
                 session_id,
-                prompt,
+                "-",
             ]
         return [
             self._executable,
@@ -130,7 +129,8 @@ class CodexProvider(Provider):
             "--sandbox",
             permissions,
             "--skip-git-repo-check",
-            prompt,
+            # The prompt goes on stdin: Linux caps one argv string at 128 KiB.
+            "-",
         ]
 
     async def send(
@@ -156,7 +156,6 @@ class CodexProvider(Provider):
         command = self.build_command(
             session_id=session_id,
             model=model,
-            prompt=prompt,
             permissions=permissions,
         )
         try:
@@ -164,6 +163,7 @@ class CodexProvider(Provider):
                 command,
                 cwd=self._working_directory(options),
                 timeout_seconds=self.settings.timeout_seconds,
+                stdin_text=prompt,
             )
         except TimeoutError as exc:
             raise ProviderError(
