@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-29
+
 ### Changed
 
 - Docker now bundles Codex 0.163.0, which serves models that 0.150.1 rejected, such as
@@ -144,6 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make check` runs `coverage` rather than `test`, so the 85% floor fails the local gate
   too. `--cov` is not in `addopts`, so a plain `pytest` run reported green while CI failed.
 
-[Unreleased]: https://github.com/chrysogonus/subscription-gateway/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/chrysogonus/subscription-gateway/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/chrysogonus/subscription-gateway/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/chrysogonus/subscription-gateway/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/chrysogonus/subscription-gateway/releases/tag/v0.1.0
