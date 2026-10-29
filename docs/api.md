@@ -275,7 +275,7 @@ Non-streaming responses also carry:
 | Header | Value |
 | --- | --- |
 | `X-Gateway-Provider` | The provider that ran: `codex` or `claude`. Check it when `subscription/auto` or a fallback may have switched providers. |
-| `X-Gateway-Model` | The alias of the model that ran (for a fallback, the other provider's default alias). On a continued session, the model the session was started with. |
+| `X-Gateway-Model` | The alias of the model that ran. After `subscription/auto` or a fallback, this is the chosen provider's model, such as `claude-code/opus`, and it stays the same for the rest of the session. |
 
 ### Role handling
 
