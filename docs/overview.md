@@ -210,7 +210,6 @@ By design:
 
 Still open (from the documentation audit):
 
-- `/ready` runs both login checks on every call, uncached and without a key.
 - The whole conversation is one command-line argument, so very long chats fail at about 128 KiB.
 - The agent endpoint's `fallback` option does nothing yet; Claude is the only agent provider.
 - `doctor` reports the port as in use while the gateway itself is running.

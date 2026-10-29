@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/overview.md`, a five-minute visual tour of the gateway with a talk track, linked from
   the README and the documentation index.
 
+### Fixed
+
+- `GET /ready` no longer starts `codex login status` and `claude auth status` on every request.
+  The result is cached for 10 seconds and shared by concurrent calls, so an unauthenticated
+  caller polling `/ready` cannot make the gateway spawn processes at will.
+
 ## [0.2.2] - 2026-10-29
 
 ### Added
