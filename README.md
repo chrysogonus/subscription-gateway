@@ -240,6 +240,7 @@ this error.
 
 | Guide | What it covers |
 | --- | --- |
+| [Overview](docs/overview.md) | A five-minute visual tour, for explaining the project to someone else |
 | [Configuration](docs/configuration.md) | `config.yaml` reference, environment variables, CLI commands, local API key |
 | [API](docs/api.md) | Endpoints, request fields, streaming, sessions, the agent endpoint, error codes |
 | [Models and routing](docs/models-and-routing.md) | Catalogued vs. passthrough models, routing, fallback, queuing |
