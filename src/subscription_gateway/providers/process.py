@@ -8,7 +8,7 @@ import signal
 from dataclasses import dataclass
 from pathlib import Path
 
-from subscription_gateway.errors import ProviderError, provider_display_name
+from subscription_gateway.errors import ProviderError, invalid_request, provider_display_name
 
 
 @dataclass(slots=True)
@@ -48,19 +48,30 @@ async def run_process(
     *,
     cwd: Path,
     timeout_seconds: float,
+    stdin_text: str | None = None,
 ) -> ProcessResult:
     """Run an argument array and always reap the child on timeout or cancellation."""
 
+    # Encode before spawning: a failure after the child starts would leave it running.
+    try:
+        stdin_bytes = None if stdin_text is None else stdin_text.encode()
+    except UnicodeEncodeError as exc:
+        raise invalid_request(
+            "The request contains text that is not valid Unicode (an unpaired surrogate).",
+            code="request_validation_error",
+        ) from exc
     process = await asyncio.create_subprocess_exec(
         *argv,
         cwd=str(cwd),
+        stdin=asyncio.subprocess.PIPE if stdin_text is not None else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         start_new_session=os.name == "posix",
     )
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(
-            process.communicate(), timeout=timeout_seconds
+            process.communicate(stdin_bytes),
+            timeout=timeout_seconds,
         )
     except (TimeoutError, asyncio.CancelledError):
         await asyncio.shield(_terminate_process(process))

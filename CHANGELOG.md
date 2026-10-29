@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Long conversations no longer fail at about 128 KiB. The gateway passed the whole rendered
+  conversation as one command-line argument, which Linux caps at 128 KiB. It now writes the
+  prompt to the CLI's standard input (`codex exec … -`, and `claude --print` with no prompt
+  argument). Text that is not valid Unicode, such as an unpaired surrogate, is now rejected with
+  `request_validation_error` before any CLI starts, instead of failing with a server error.
 - `GET /ready` no longer starts `codex login status` and `claude auth status` on every request.
   The result is cached for 10 seconds and shared by concurrent calls, so an unauthenticated
   caller polling `/ready` cannot make the gateway spawn processes at will.
