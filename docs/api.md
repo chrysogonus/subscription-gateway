@@ -338,8 +338,11 @@ What the agent can do:
 Every agent run uses `--restricted --strict-mcp-config --safe-mode`, with the tool list passed
 to both `--tools` and `--allowedTools`. Shell and command tools are never exposed.
 
-Agent runs need Claude Code 2.1.248 or newer for these flags. The Docker image pins 2.1.251. The
-gateway does not check the version, so an older native CLI fails at run time with a provider error.
+Agent runs need Claude Code 2.1.248 or newer for these flags. The Docker image pins 2.1.251.
+Before an agent run, the gateway checks `claude --version` and refuses an older CLI with
+`400 unsupported_provider_capability`, without starting it. If the version cannot be read, the run
+goes ahead. The version is read once per gateway process, so restart the gateway after upgrading
+the CLI. `doctor` reports the same check.
 
 Codex models return `400 unsupported_provider_capability` on this endpoint, because Codex's CLI
 sandbox does not confine read access to the requested directory.
@@ -374,7 +377,7 @@ Every error uses the OpenAI-style shape:
 | `conflicting_session_ids` | `invalid_request` | 400 | — | Header and body session IDs differ |
 | `session_model_mismatch` | `invalid_request` | 400 | — | Continuing a session with a different model |
 | `session_context_mismatch` | `invalid_request` | 400 | — | Continuing a session with a different API type, `cwd`, or permissions |
-| `unsupported_provider_capability` | `invalid_request` | 400 | — | A Codex model on the agent endpoint |
+| `unsupported_provider_capability` | `invalid_request` | 400 | — | A Codex model, or a Claude Code older than 2.1.248, on the agent endpoint |
 | `invalid_model_name` | `invalid_request` | 400 | — | A stored session's model fails the name rules |
 | `invalid_api_key` | `authentication_error` | 401 | — | Missing or wrong gateway key |
 | `agent_permission_error` | `agent_permission_error` | 403 | — | No gateway key configured, or `cwd` rejected |

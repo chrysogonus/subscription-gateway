@@ -16,6 +16,11 @@ from subscription_gateway import __version__
 from subscription_gateway.config import LOOPBACK_HOSTS, GatewayConfig, load_config
 from subscription_gateway.main import create_app
 from subscription_gateway.model_names import PROVIDER_PREFIX_BY_NAME
+from subscription_gateway.providers.claude import (
+    MIN_AGENT_VERSION,
+    ClaudeProvider,
+    format_version,
+)
 from subscription_gateway.providers.registry import ProviderRegistry, ProviderStatus
 from subscription_gateway.sessions.storage import SQLiteSessionStorage
 
@@ -81,7 +86,8 @@ async def _doctor(config: GatewayConfig) -> int:
     )
     checks.append(("Configuration", True, "valid"))
 
-    statuses = await ProviderRegistry(config).statuses()
+    registry = ProviderRegistry(config)
+    statuses = await registry.statuses()
     for provider in statuses:
         checks.append(
             (
@@ -97,6 +103,16 @@ async def _doctor(config: GatewayConfig) -> int:
                 "ready" if provider.authenticated else "not detected (optional)",
             )
         )
+    claude = registry.get("claude")
+    if isinstance(claude, ClaudeProvider) and claude.is_installed():
+        version = await claude.version()
+        supported = version is not None and version >= MIN_AGENT_VERSION
+        detail = f"version {format_version(version) if version else 'unknown'}"
+        if not supported:
+            detail += (
+                f"; /v1/agents/run needs {format_version(MIN_AGENT_VERSION)} or newer (optional)"
+            )
+        checks.append(("Claude Code agent support", supported, detail))
 
     storage_ok, storage_detail = await _check_storage(config.storage.sqlite_path)
     checks.append(("SQLite storage", storage_ok, storage_detail))

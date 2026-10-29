@@ -17,8 +17,9 @@ import pytest
 import uvicorn
 
 from subscription_gateway import __version__, cli
-from subscription_gateway.config import GatewayConfig
+from subscription_gateway.config import ClaudeSettings, GatewayConfig
 from subscription_gateway.providers.base import Provider
+from subscription_gateway.providers.claude import ClaudeProvider
 from subscription_gateway.providers.registry import ProviderStatus
 
 READY = ProviderStatus(
@@ -45,6 +46,7 @@ class StubRegistry:
     """Stands in for ProviderRegistry so no provider CLI is ever consulted."""
 
     statuses_to_return: ClassVar[list[ProviderStatus]] = [READY, MISSING]
+    providers_to_return: ClassVar[dict[str, Provider]] = {}
 
     def __init__(self, config: GatewayConfig, providers: dict[str, Provider] | None = None) -> None:
         self.config = config
@@ -52,11 +54,15 @@ class StubRegistry:
     async def statuses(self) -> list[ProviderStatus]:
         return list(self.statuses_to_return)
 
+    def get(self, name: str) -> Provider | None:
+        return self.providers_to_return.get(name)
+
 
 @pytest.fixture(autouse=True)
 def stub_registry(monkeypatch: pytest.MonkeyPatch) -> type[StubRegistry]:
     monkeypatch.setattr(cli, "ProviderRegistry", StubRegistry)
     monkeypatch.setattr(StubRegistry, "statuses_to_return", [READY, MISSING])
+    monkeypatch.setattr(StubRegistry, "providers_to_return", {})
     return StubRegistry
 
 
@@ -282,3 +288,58 @@ def test_serve_warns_before_sharing_a_subscription(
     cli.main(["serve", "--config", str(write_remote_config(tmp_path))])
 
     assert "Warning: signed in with a subscription: Codex." in capsys.readouterr().err
+
+
+def installed_claude(
+    monkeypatch: pytest.MonkeyPatch, version: tuple[int, ...] | None
+) -> ClaudeProvider:
+    claude = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+
+    async def installed_version() -> tuple[int, ...] | None:
+        return version
+
+    monkeypatch.setattr(claude, "version", installed_version)
+    monkeypatch.setattr(StubRegistry, "providers_to_return", {"claude": claude})
+    return claude
+
+
+@pytest.mark.parametrize(
+    ("version", "line"),
+    [
+        ((2, 1, 312), "[PASS] Claude Code agent support: version 2.1.312"),
+        (
+            (2, 1, 200),
+            "[WARN] Claude Code agent support: version 2.1.200; "
+            "/v1/agents/run needs 2.1.248 or newer (optional)",
+        ),
+        (
+            None,
+            "[WARN] Claude Code agent support: version unknown; "
+            "/v1/agents/run needs 2.1.248 or newer (optional)",
+        ),
+    ],
+)
+def test_doctor_reports_whether_claude_code_can_run_agents(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    version: tuple[int, ...] | None,
+    line: str,
+) -> None:
+    installed_claude(monkeypatch, version)
+
+    with pytest.raises(SystemExit) as caught:
+        cli.main(["doctor", "--config", str(write_config(tmp_path))])
+
+    # Agent support is optional, like each provider, so an old CLI only warns.
+    assert caught.value.code == 0
+    assert line in capsys.readouterr().out
+
+
+def test_doctor_skips_the_agent_check_without_claude_code(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["doctor", "--config", str(write_config(tmp_path))])
+
+    assert "agent support" not in capsys.readouterr().out

@@ -213,6 +213,7 @@ After `make install`, the command lives in the project environment. Use the `mak
 | Python version ≥ 3.12 | yes |
 | Configuration valid | — (an invalid config already exits 2) |
 | Codex / Claude Code installation and authentication | no; each provider is optional |
+| Claude Code agent support: version ≥ 2.1.248, which `/v1/agents/run` needs (only when Claude Code is installed) | no |
 | SQLite storage writable (creates the database file and its directory if missing) | yes |
 | Server port free to bind | yes; this fails while the gateway itself is running |
 | Subscription sharing (non-loopback binds only) | no |
