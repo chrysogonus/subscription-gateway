@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from subscription_gateway.config import RoutingSettings
 from subscription_gateway.errors import invalid_request, model_not_available
-from subscription_gateway.model_names import AUTO_MODEL
+from subscription_gateway.model_names import AUTO_MODEL, PROVIDER_PREFIX_BY_NAME
 from subscription_gateway.providers.base import Provider
 from subscription_gateway.providers.registry import ProviderRegistry
 
@@ -80,10 +80,23 @@ class RoutingPolicy:
         ]
         return [direct, *alternatives]
 
-    def pinned(self, provider_name: str, public_model: str, provider_model: str) -> Route:
+    def pinned(self, provider_name: str, session_model: str, provider_model: str) -> Route:
         provider = self.registry.get(provider_name)
         if provider is None:
-            raise model_not_available(public_model, provider_name)
+            raise model_not_available(session_model, provider_name)
+        resolved = self.registry.resolve(session_model)
+        if (
+            resolved is not None
+            and resolved.provider is provider
+            and resolved.provider_model == provider_model
+        ):
+            public_model = session_model
+        else:
+            # subscription/auto, or a first turn that fell back: name the alias that runs.
+            public_model = next(
+                (alias for alias, model in provider.models.items() if model == provider_model),
+                f"{PROVIDER_PREFIX_BY_NAME.get(provider.name, '')}{provider_model}",
+            )
         return Route(provider, public_model, provider_model, explicit_model=True)
 
     def _ordered_defaults(self) -> list[Route]:

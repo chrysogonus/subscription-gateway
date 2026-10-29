@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `X-Gateway-Model` on a continued session names the model that runs. It used to repeat the
+  model the session was started with, so a `subscription/auto` session reported
+  `subscription/auto`, and a session that fell back from `codex/gpt-5.6-sol` to Claude kept
+  reporting `codex/gpt-5.6-sol`.
+
 ## [0.2.1] - 2026-10-29
 
 ### Changed

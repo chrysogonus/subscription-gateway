@@ -282,3 +282,52 @@ async def test_concurrent_requests_for_one_session_are_serialized(
 
     assert len(responses) == 2
     assert codex.max_active == 1
+
+
+def continue_session(client: TestClient, model: str, session: str) -> Any:
+    return client.post(
+        "/v1/chat/completions",
+        headers={"X-Gateway-Session": session},
+        json={"model": model, "messages": [{"role": "user", "content": "again"}]},
+    )
+
+
+@pytest.mark.parametrize("model", ["subscription/auto", "codex/gpt-5.6-sol"])
+def test_continuation_reports_the_model_that_runs_after_a_fallback(
+    gateway_config: GatewayConfig, model: str
+) -> None:
+    codex = FakeProvider("codex", error=temporary_error("codex"))
+    claude = FakeProvider("claude", text="fallback")
+    with TestClient(
+        create_app(gateway_config, providers={"codex": codex, "claude": claude})
+    ) as client:
+        first = chat(client, model)
+        second = continue_session(client, model, first.headers["x-gateway-session"])
+
+    for response in (first, second):
+        assert response.status_code == 200
+        assert response.headers["x-gateway-provider"] == "claude"
+        assert response.headers["x-gateway-model"] == "claude-code/opus"
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("subscription/auto", "codex/gpt-5.6-sol"),
+        ("codex/gpt-5.6-sol", "codex/gpt-5.6-sol"),
+        ("codex/gpt-6-luna", "codex/gpt-6-luna"),
+        ("claude-code/opus-5", "claude-code/opus-5"),
+    ],
+)
+def test_continuation_keeps_reporting_the_same_model(
+    gateway_config: GatewayConfig, model: str, expected: str
+) -> None:
+    codex = FakeProvider("codex")
+    claude = FakeProvider("claude")
+    with TestClient(
+        create_app(gateway_config, providers={"codex": codex, "claude": claude})
+    ) as client:
+        first = chat(client, model)
+        second = continue_session(client, model, first.headers["x-gateway-session"])
+
+    assert first.headers["x-gateway-model"] == second.headers["x-gateway-model"] == expected
