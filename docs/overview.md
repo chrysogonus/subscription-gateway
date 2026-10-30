@@ -5,7 +5,7 @@
 **A localhost adapter that lets any OpenAI-compatible app use the Codex and Claude Code CLIs you
 are already signed in to.** This page is a talk-through, built to explain the project to someone in
 about five minutes: one idea per section, each carried by one picture. The reference guides linked
-at the end have the details. It describes version 0.2.2.
+at the end have the details. It describes version 0.2.3.
 
 | Time | Section | The one thing to say |
 | --- | --- | --- |
