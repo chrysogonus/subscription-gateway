@@ -16,7 +16,7 @@ RUN npm install --global \
         "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     && npm cache clean --force
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ARG GATEWAY_UID=1000
 ARG APP_VERSION=dev
