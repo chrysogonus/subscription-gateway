@@ -209,3 +209,43 @@ async def test_codex_sends_the_prompt_on_stdin(
     assert calls[0]["stdin_text"] == f"[USER]\n{LONG_MESSAGE}"
     assert calls[0]["command"][-1] == "-"
     assert all(LONG_MESSAGE not in part for part in calls[0]["command"])
+
+
+@pytest.mark.asyncio
+async def test_codex_writes_the_json_schema_to_an_output_schema_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    schema = {"type": "object", "properties": {"score": {"type": "integer"}}}
+    seen: list[Any] = []
+
+    async def fake_run_process(command: list[str], **kwargs: Any) -> ProcessResult:
+        path = Path(command[command.index("--output-schema") + 1])
+        seen.append((path, json.loads(path.read_text())))
+        events = [
+            {"type": "item.completed", "item": {"type": "agent_message", "text": "Thinking."}},
+            {"type": "item.completed", "item": {"type": "agent_message", "text": '{"score":4}'}},
+        ]
+        return ProcessResult(0, "\n".join(json.dumps(event) for event in events), "")
+
+    monkeypatch.setattr(codex_module, "run_process", fake_run_process)
+    provider = CodexProvider(CodexSettings(command="/bin/echo", working_directory=tmp_path))
+    response = await provider.send(
+        None, "gpt-5.6-sol", [{"role": "user", "content": "Rate"}], {"json_schema": schema}
+    )
+
+    path, written = seen[0]
+    assert written == schema
+    assert not path.exists()  # removed once the CLI has finished
+    assert response.text == '{"score":4}'  # only the final message is the structured answer
+
+
+def test_codex_resume_command_passes_the_output_schema() -> None:
+    provider = CodexProvider(CodexSettings(command="/bin/echo"))
+    command = provider.build_command(
+        session_id="thread-123",
+        model="gpt-5.6-sol",
+        permissions="read-only",
+        output_schema=Path("/tmp/schema.json"),
+    )
+    assert command[command.index("--output-schema") + 1] == "/tmp/schema.json"
+    assert command[-2:] == ["thread-123", "-"]

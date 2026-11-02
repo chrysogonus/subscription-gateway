@@ -180,7 +180,7 @@ class GatewayEngine:
                 )
             except ProviderError as exc:
                 last_error = exc
-                if existing is not None or not self._is_retryable(route, exc):
+                if existing is not None or not exc.retryable:
                     raise
                 logger.warning(
                     "provider attempt failed provider=%s model=%s code=%s",
@@ -276,7 +276,7 @@ class GatewayEngine:
                             return
                         except ProviderError as exc:
                             last_error = exc
-                            if emitted or not created or not self._is_retryable(route, exc):
+                            if emitted or not created or not exc.retryable:
                                 raise
                     if last_error is not None:
                         raise last_error
@@ -341,15 +341,6 @@ class GatewayEngine:
             working_directory=working_directory,
             permissions=permissions,
         )
-
-    @staticmethod
-    def _is_retryable(route: Route, exc: ProviderError) -> bool:
-        """A model the caller named and the runtime rejected is a request error,
-        not a transient failure: no other provider can supply that model."""
-
-        if exc.code == "model_not_available" and route.explicit_model:
-            return False
-        return exc.retryable
 
     @staticmethod
     def _validate_capability(route: Route, agent_task: bool) -> None:

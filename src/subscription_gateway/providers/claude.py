@@ -127,6 +127,7 @@ class ClaudeProvider(Provider):
         model: str,
         permissions: str,
         agent_task: bool,
+        json_schema: dict[str, Any] | None = None,
     ) -> list[str]:
         if not self._executable:
             raise classify_provider_failure(self.name, "unavailable")
@@ -153,6 +154,8 @@ class ClaudeProvider(Provider):
         ]
         if session_id and not session_id.startswith("pending:"):
             command.extend(["--resume", session_id])
+        if json_schema is not None:
+            command.extend(["--json-schema", json.dumps(json_schema)])
         if agent_task:
             command.extend(["--restricted", "--strict-mcp-config"])
             if permissions == "workspace-write":
@@ -217,6 +220,7 @@ class ClaudeProvider(Provider):
             model=model,
             permissions=permissions,
             agent_task=bool(options.get("agent_task")),
+            json_schema=options.get("json_schema"),
         )
         try:
             result = await run_process(
@@ -271,11 +275,12 @@ def parse_claude_result(result: ProcessResult) -> ProviderResponse:
         )
     if payload.get("is_error") or payload.get("subtype") in {"error", "failed"}:
         raise classify_provider_failure("claude", json.dumps(payload))
-    text = payload.get("result")
-    if not isinstance(text, str):
-        structured = payload.get("structured_output")
-        text = json.dumps(structured, ensure_ascii=False) if structured is not None else None
-    if not text:
+    structured = payload.get("structured_output")
+    # With --json-schema, "result" may wrap the object in prose; structured_output is validated.
+    text = (
+        payload.get("result") if structured is None else json.dumps(structured, ensure_ascii=False)
+    )
+    if not isinstance(text, str) or not text:
         raise ProviderError(
             "Claude Code completed without an assistant result.",
             error_type="provider_protocol_error",

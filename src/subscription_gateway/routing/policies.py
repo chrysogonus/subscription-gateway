@@ -19,7 +19,6 @@ class Route:
     provider: Provider
     public_model: str
     provider_model: str
-    explicit_model: bool = False
 
 
 class RoutingPolicy:
@@ -64,21 +63,8 @@ class RoutingPolicy:
                 resolved.provider.name,
                 resolved.provider_model,
             )
-        direct = Route(
-            resolved.provider,
-            requested_model,
-            resolved.provider_model,
-            explicit_model=True,
-        )
-        if not allow_fallback or side_effects:
-            return [direct]
-        alternatives = [
-            route
-            for route in self._ordered_defaults()
-            if route.provider.name != resolved.provider.name
-            and (not filesystem_agent or route.provider.capabilities.filesystem_agent)
-        ]
-        return [direct, *alternatives]
+        # A named model never falls back: the caller asked for that model, not any answer.
+        return [Route(resolved.provider, requested_model, resolved.provider_model)]
 
     def pinned(self, provider_name: str, session_model: str, provider_model: str) -> Route:
         provider = self.registry.get(provider_name)
@@ -97,7 +83,7 @@ class RoutingPolicy:
                 (alias for alias, model in provider.models.items() if model == provider_model),
                 f"{PROVIDER_PREFIX_BY_NAME.get(provider.name, '')}{provider_model}",
             )
-        return Route(provider, public_model, provider_model, explicit_model=True)
+        return Route(provider, public_model, provider_model)
 
     def _ordered_defaults(self) -> list[Route]:
         routes: list[Route] = []

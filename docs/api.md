@@ -107,7 +107,8 @@ curl http://127.0.0.1:11435/v1/chat/completions \
 | `gateway_session_id` | Continue a session; same as the `X-Gateway-Session` header. |
 | `tools`, `tool_choice` | Rejected with `400 unsupported_feature`, even when empty. |
 | `temperature`, `top_p`, `max_tokens`, `max_completion_tokens`, `stop`, `user` | Validated, then **ignored**. The agent CLIs have no stable equivalents. |
-| Anything else (`n`, `response_format`, `seed`, …) | Accepted and ignored. |
+| `response_format` | `{"type": "json_schema", "json_schema": {"schema": {...}}}` makes the CLI return JSON matching the schema; see [Structured output](#structured-output). `text` and `json_object` are accepted and not enforced. |
+| Anything else (`n`, `seed`, …) | Accepted and ignored. |
 
 Image, audio, and file content parts and the `tool`/`function` roles fail validation with
 `400 request_validation_error`. A message's `name` is accepted but not passed on.
@@ -185,7 +186,8 @@ curl http://127.0.0.1:11435/v1/responses \
 | `gateway_session_id`, or `metadata.gateway_session_id` | Continue a session. |
 | `tools`, `previous_response_id` | Rejected with `400 unsupported_feature`. Use `X-Gateway-Session` for continuation. |
 | `max_output_tokens`, `temperature` | Validated, then ignored. |
-| Anything else (`reasoning`, `text`, `store`, …) | Accepted and ignored. |
+| `text.format` | `{"type": "json_schema", "schema": {...}}` works like Chat's `response_format`; see [Structured output](#structured-output). |
+| Anything else (`reasoning`, `store`, …) | Accepted and ignored. |
 
 Earlier output can be sent back as `assistant` messages with `output_text` parts; extra keys
 such as `annotations` are ignored. Non-text parts such as `input_image` and `input_file`, and
@@ -194,6 +196,32 @@ non-message items such as function calls, fail validation with `400 request_vali
 The response has `object: "response"`, `status: "completed"`, one assistant `message` item with an
 `output_text` part, a top-level `output_text`, `usage` with `input_tokens`/`output_tokens`/
 `total_tokens`, and `gateway_session_id`.
+
+## Structured output
+
+A `json_schema` response format is passed to the CLI, which constrains the final answer to the
+schema: `claude --json-schema` or `codex exec --output-schema`. The reply's message content (or
+`output_text`) is the JSON document as a string.
+
+```bash
+curl http://127.0.0.1:11435/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "claude-code/haiku",
+    "messages": [{"role": "user", "content": "Rate this answer from 1 to 5: ..."}],
+    "response_format": {"type": "json_schema", "json_schema": {"name": "grade", "schema": {
+      "type": "object",
+      "properties": {"score": {"type": "integer"}, "reason": {"type": "string"}},
+      "required": ["score", "reason"],
+      "additionalProperties": false
+    }}}
+  }'
+```
+
+- A `json_schema` format without a `schema` object fails with `400 invalid_response_format`.
+- Codex follows OpenAI's strict structured-output rules: list every property in `required` and
+  set `"additionalProperties": false`, or the CLI rejects the schema.
+- `json_object` is not enforced. Use `json_schema` with `{"type": "object"}` on Claude instead.
 
 ## Python OpenAI client
 
@@ -275,8 +303,8 @@ Non-streaming responses also carry:
 
 | Header | Value |
 | --- | --- |
-| `X-Gateway-Provider` | The provider that ran: `codex` or `claude`. Check it when `subscription/auto` or a fallback may have switched providers. |
-| `X-Gateway-Model` | The alias of the model that ran. After `subscription/auto` or a fallback, this is the chosen provider's model, such as `claude-code/opus`, and it stays the same for the rest of the session. |
+| `X-Gateway-Provider` | The provider that ran: `codex` or `claude`. Check it when `subscription/auto` may have switched providers. |
+| `X-Gateway-Model` | The alias of the model that ran. After `subscription/auto`, this is the chosen provider's model, such as `claude-code/opus`, and it stays the same for the rest of the session. The body's `model` field names the same model. |
 
 ### Role handling
 
@@ -368,8 +396,8 @@ Every error uses the OpenAI-style shape:
 `provider` is present when a specific provider failed. `request_validation_error` adds a
 `details` list from the request validator.
 
-"May fall back" means a new, non-session request can move to the next provider when
-[fallback](models-and-routing.md#routing-fallback-and-queuing) is enabled.
+"May fall back" means a new, non-session `subscription/auto` request can move to the next
+provider when [fallback](models-and-routing.md#routing-fallback-and-queuing) is enabled.
 
 | `code` | `type` | HTTP | May fall back | When |
 | --- | --- | --- | --- | --- |

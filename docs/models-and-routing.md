@@ -97,24 +97,23 @@ Which routes a request gets:
 | Request | Routes, in order |
 | --- | --- |
 | `subscription/auto` | The default model of each provider in `routing.order`. With `routing.fallback: false`, only the first one. |
-| An explicit `codex/*` or `claude-code/*` model | That model, then (with fallback on) the default model of each other provider in `routing.order` |
+| An explicit `codex/*` or `claude-code/*` model | Only that model. It never falls back. |
 | A continued session | Only the session's provider and model |
 | An agent run | Only agent-capable providers (Claude). See [the agent endpoint](api.md#agent-endpoint). |
 
 Fallback rules:
 
-- Fallback applies only to **new** requests, never to a continued session.
+- Fallback applies only to **new** `subscription/auto` requests, never to a model the caller
+  named and never to a continued session. A named model is a promise about who answers: an eval
+  or judge that asks for `claude-code/haiku` must not silently get a Codex reply.
 - **Retryable** failures can fall back: `provider_unavailable`, `provider_temporary_error`,
   `provider_not_authenticated` (when the login check finds it before the run),
   `provider_usage_limit`, `provider_timeout`, `provider_execution_failed`,
   `provider_malformed_output`, and `provider_missing_output`. See the
   [error reference](api.md#errors).
-- If the runtime rejects a model the caller **named**, the request never falls back. No other
-  provider can supply that model, and answering from a different one would misattribute the
-  reply. `subscription/auto` still falls back, because the caller named no model.
 - Request errors (validation, sessions, unsupported features) never fall back.
-- A provider missing from `routing.order` is never used by `subscription/auto` or as a fallback
-  target. It can still be called by an explicit model name.
+- A provider missing from `routing.order` is never used by `subscription/auto`. It can still be
+  called by an explicit model name.
 - Write-capable agent runs do not fall back unless both the request's `fallback: true` and
   `agent.allow_write_fallback: true` are set.
 - A stream can fall back only before it has sent any text.
