@@ -68,16 +68,44 @@ def test_retryable_failure_falls_back(gateway_config: GatewayConfig) -> None:
     with TestClient(
         create_app(gateway_config, providers={"codex": codex, "claude": claude})
     ) as client:
-        response = client.post(
-            "/v1/chat/completions",
-            json={
-                "model": "codex/gpt-5.6-sol",
-                "messages": [{"role": "user", "content": "x"}],
-            },
-        )
+        response = chat(client, "subscription/auto")
     assert response.status_code == 200
     assert response.json()["choices"][0]["message"]["content"] == "fallback"
     assert len(codex.calls) == len(claude.calls) == 1
+
+
+def test_named_model_does_not_fall_back_on_retryable_error(
+    gateway_config: GatewayConfig,
+) -> None:
+    """An eval that names its judge must never be answered by another vendor's model."""
+
+    codex = FakeProvider("codex", error=temporary_error("codex"))
+    claude = FakeProvider("claude", text="fallback")
+    with TestClient(
+        create_app(gateway_config, providers={"codex": codex, "claude": claude})
+    ) as client:
+        response = chat(client, "codex/gpt-5.6-sol")
+    assert response.status_code == 503
+    assert claude.calls == []
+
+
+@pytest.mark.parametrize("endpoint", ["/v1/chat/completions", "/v1/responses"])
+def test_response_body_names_the_model_that_ran(
+    gateway_config: GatewayConfig, endpoint: str
+) -> None:
+    codex = FakeProvider("codex", error=temporary_error("codex"))
+    claude = FakeProvider("claude", text="fallback")
+    payload: dict[str, Any] = {"model": "subscription/auto"}
+    if endpoint == "/v1/responses":
+        payload["input"] = "x"
+    else:
+        payload["messages"] = [{"role": "user", "content": "x"}]
+    with TestClient(
+        create_app(gateway_config, providers={"codex": codex, "claude": claude})
+    ) as client:
+        response = client.post(endpoint, json=payload)
+    assert response.status_code == 200
+    assert response.json()["model"] == "claude-code/opus"
 
 
 def test_fallback_can_be_disabled(gateway_config: GatewayConfig) -> None:
@@ -292,10 +320,10 @@ def continue_session(client: TestClient, model: str, session: str) -> Any:
     )
 
 
-@pytest.mark.parametrize("model", ["subscription/auto", "codex/gpt-5.6-sol"])
 def test_continuation_reports_the_model_that_runs_after_a_fallback(
-    gateway_config: GatewayConfig, model: str
+    gateway_config: GatewayConfig,
 ) -> None:
+    model = "subscription/auto"
     codex = FakeProvider("codex", error=temporary_error("codex"))
     claude = FakeProvider("claude", text="fallback")
     with TestClient(

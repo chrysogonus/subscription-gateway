@@ -51,6 +51,7 @@ class ChatCompletionRequest(BaseModel):
     user: str | None = None
     tools: list[dict[str, Any]] | None = None
     tool_choice: Any | None = None
+    response_format: dict[str, Any] | None = None
     gateway_session_id: str | None = None
 
     def provider_options(self) -> dict[str, Any]:
@@ -59,6 +60,7 @@ class ChatCompletionRequest(BaseModel):
             "top_p": self.top_p,
             "max_tokens": self.max_completion_tokens or self.max_tokens,
             "stop": self.stop,
+            "json_schema": json_schema_of(self.response_format),
         }
 
     def validate_supported(self) -> None:
@@ -67,6 +69,22 @@ class ChatCompletionRequest(BaseModel):
                 "OpenAI tool calls are not supported by this agent-runtime gateway prototype.",
                 code="unsupported_feature",
             )
+
+
+def json_schema_of(response_format: Any) -> dict[str, Any] | None:
+    """The JSON Schema a Chat `response_format` or a Responses `text.format` asks for, if any."""
+
+    if not isinstance(response_format, dict) or response_format.get("type") != "json_schema":
+        return None
+    # Chat nests the schema under "json_schema"; Responses puts it on the format itself.
+    container = response_format.get("json_schema", response_format)
+    schema = container.get("schema") if isinstance(container, dict) else None
+    if not isinstance(schema, dict):
+        raise invalid_request(
+            "A json_schema response format needs a JSON Schema object in 'schema'.",
+            code="invalid_response_format",
+        )
+    return schema
 
 
 def messages_to_prompt(messages: list[dict[str, Any]] | list[ChatMessage]) -> str:

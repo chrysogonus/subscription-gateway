@@ -123,7 +123,7 @@ new model ships.
 
 | Key | Meaning |
 | --- | --- |
-| `fallback` | Allow a new chat request to move to another provider after a retryable failure. See [Routing and fallback](models-and-routing.md#routing-fallback-and-queuing). |
+| `fallback` | Allow a new `subscription/auto` request to move to another provider after a retryable failure. Named models never fall back. See [Routing and fallback](models-and-routing.md#routing-fallback-and-queuing). |
 | `order` | Provider order for `subscription/auto` and for fallback. A provider left out is never chosen by either. |
 
 ### agent

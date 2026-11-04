@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Structured output. A Chat `response_format` or a Responses `text.format` of type
+  `json_schema` is passed to `claude --json-schema` or `codex exec --output-schema`, so the
+  reply is JSON that matches the schema. Before, the field was silently ignored.
+
+### Changed
+
+- A model the caller names, such as `claude-code/haiku`, no longer falls back to another
+  provider on a retryable failure. Only `subscription/auto` falls back. An eval or judge that
+  named its model could otherwise receive another vendor's answer under the requested name.
+- The response body's `model` field names the model that ran, matching `X-Gateway-Model`,
+  instead of echoing the requested name such as `subscription/auto`.
+
 ## [0.2.3] - 2026-10-30
 
 ### Added

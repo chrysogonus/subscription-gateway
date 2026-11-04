@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 
 from subscription_gateway.api.chat import requested_session
+from subscription_gateway.compat.openai_chat import json_schema_of
 from subscription_gateway.compat.openai_responses import ResponsesRequest, responses_response
 from subscription_gateway.compat.streaming import sse_done, sse_json
 from subscription_gateway.errors import GatewayError
@@ -29,6 +30,7 @@ async def create_response(
     options = {
         "max_tokens": body.max_output_tokens,
         "temperature": body.temperature,
+        "json_schema": json_schema_of((body.text or {}).get("format")),
         "request_id": request.state.request_id,
     }
     if body.stream:
@@ -58,7 +60,7 @@ async def create_response(
     response.headers["X-Gateway-Model"] = result.executed_model
     return responses_response(
         result.response,
-        model=body.model,
+        model=result.executed_model,
         gateway_session_id=result.gateway_session_id,
     )
 

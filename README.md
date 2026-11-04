@@ -118,7 +118,7 @@ sequenceDiagram
     CLI->>Cloud: Uses its own saved login
     Cloud-->>CLI: Answer
     CLI-->>GW: JSON output
-    Note over GW: On a retryable failure (limit, timeout, outage),<br/>a new request may fall back to the other provider
+    Note over GW: On a retryable failure (limit, timeout, outage),<br/>a new subscription/auto request may fall back to the other provider
     GW-->>App: OpenAI-style response<br/>+ X-Gateway-Session / -Provider / -Model headers
 ```
 
@@ -232,8 +232,7 @@ Pickers only show catalogued models. Add the model under `providers.<name>.model
 <summary><b><code>model_not_available</code> (404)</b></summary>
 
 Either the name is not a valid `codex/<model>` or `claude-code/<model>`, or your CLI version or plan
-does not offer that model. A model you name explicitly never falls back to another provider for
-this error.
+does not offer that model. A model you name explicitly never falls back to another provider.
 </details>
 
 ## Documentation

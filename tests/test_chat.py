@@ -321,3 +321,79 @@ def test_local_api_authentication(gateway_config: GatewayConfig) -> None:
     assert denied.json()["error"]["code"] == "invalid_api_key"
     assert allowed.status_code == 200
     assert health.status_code == 200
+
+
+SCORE_SCHEMA = {
+    "type": "object",
+    "properties": {"score": {"type": "integer"}},
+    "required": ["score"],
+    "additionalProperties": False,
+}
+
+
+def test_chat_json_schema_response_format_reaches_the_provider(
+    client: TestClient, fake_codex: FakeProvider
+) -> None:
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "codex/gpt-5.6-sol",
+            "messages": [{"role": "user", "content": "Rate it."}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "score", "schema": SCORE_SCHEMA, "strict": True},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert fake_codex.calls[0]["options"]["json_schema"] == SCORE_SCHEMA
+
+
+def test_responses_json_schema_text_format_reaches_the_provider(
+    client: TestClient, fake_codex: FakeProvider
+) -> None:
+    response = client.post(
+        "/v1/responses",
+        json={
+            "model": "codex/gpt-5.6-sol",
+            "input": "Rate it.",
+            "text": {"format": {"type": "json_schema", "name": "score", "schema": SCORE_SCHEMA}},
+        },
+    )
+
+    assert response.status_code == 200
+    assert fake_codex.calls[0]["options"]["json_schema"] == SCORE_SCHEMA
+
+
+def test_plain_text_response_format_sends_no_schema(
+    client: TestClient, fake_codex: FakeProvider
+) -> None:
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "codex/gpt-5.6-sol",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "response_format": {"type": "text"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert fake_codex.calls[0]["options"].get("json_schema") is None
+
+
+def test_json_schema_format_without_a_schema_is_rejected(
+    client: TestClient, fake_codex: FakeProvider
+) -> None:
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "codex/gpt-5.6-sol",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "response_format": {"type": "json_schema", "json_schema": {"name": "score"}},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_response_format"
+    assert fake_codex.calls == []

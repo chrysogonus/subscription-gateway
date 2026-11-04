@@ -296,3 +296,29 @@ async def test_claude_sends_the_prompt_on_stdin(
 
     assert stdin[-1] == f"[USER]\n{LONG_MESSAGE}"
     assert all(LONG_MESSAGE not in part for part in calls[-1])
+
+
+def test_claude_command_passes_a_json_schema() -> None:
+    provider = ClaudeProvider(ClaudeSettings(command="/bin/echo"))
+    schema = {"type": "object", "properties": {"score": {"type": "integer"}}}
+    command = provider.build_command(
+        session_id=None,
+        model="opus",
+        permissions="read-only",
+        agent_task=False,
+        json_schema=schema,
+    )
+    assert json.loads(command[command.index("--json-schema") + 1]) == schema
+
+
+def test_claude_structured_output_wins_over_result_text() -> None:
+    payload = {
+        "type": "result",
+        "subtype": "success",
+        "is_error": False,
+        "result": "Here is the score you asked for.",
+        "structured_output": {"score": 4},
+        "session_id": "s",
+    }
+    response = parse_claude_result(ProcessResult(0, json.dumps(payload), ""))
+    assert json.loads(response.text) == {"score": 4}

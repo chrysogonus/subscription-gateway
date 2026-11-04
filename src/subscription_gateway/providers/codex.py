@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 import time
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +89,7 @@ class CodexProvider(Provider):
         session_id: str | None,
         model: str,
         permissions: str,
+        output_schema: Path | None = None,
     ) -> list[str]:
         if not self._executable:
             raise classify_provider_failure(self.name, "unavailable")
@@ -102,6 +105,7 @@ class CodexProvider(Provider):
                 "Codex permissions must be read-only or workspace-write.",
                 code="invalid_permissions",
             )
+        schema_args = ["--output-schema", str(output_schema)] if output_schema else []
         if session_id and not session_id.startswith("pending:"):
             return [
                 self._executable,
@@ -114,6 +118,7 @@ class CodexProvider(Provider):
                 "--skip-git-repo-check",
                 "-c",
                 f'sandbox_mode="{permissions}"',
+                *schema_args,
                 session_id,
                 "-",
             ]
@@ -129,6 +134,7 @@ class CodexProvider(Provider):
             "--sandbox",
             permissions,
             "--skip-git-repo-check",
+            *schema_args,
             # The prompt goes on stdin: Linux caps one argv string at 128 KiB.
             "-",
         ]
@@ -153,18 +159,30 @@ class CodexProvider(Provider):
         permissions = str(options.get("permissions", "read-only"))
         if permissions not in {"read-only", "workspace-write"}:
             permissions = "read-only"
-        command = self.build_command(
-            session_id=session_id,
-            model=model,
-            permissions=permissions,
-        )
+        schema = options.get("json_schema")
         try:
-            result = await run_process(
-                command,
-                cwd=self._working_directory(options),
-                timeout_seconds=self.settings.timeout_seconds,
-                stdin_text=prompt,
-            )
+            with ExitStack() as stack:
+                output_schema = None
+                if schema is not None:
+                    # Codex reads --output-schema from a file; it is removed when the run ends.
+                    handle = stack.enter_context(
+                        tempfile.NamedTemporaryFile("w", suffix=".json", delete_on_close=False)
+                    )
+                    json.dump(schema, handle)
+                    handle.close()
+                    output_schema = Path(handle.name)
+                command = self.build_command(
+                    session_id=session_id,
+                    model=model,
+                    permissions=permissions,
+                    output_schema=output_schema,
+                )
+                result = await run_process(
+                    command,
+                    cwd=self._working_directory(options),
+                    timeout_seconds=self.settings.timeout_seconds,
+                    stdin_text=prompt,
+                )
         except TimeoutError as exc:
             raise ProviderError(
                 "Codex command timed out.",
@@ -183,10 +201,10 @@ class CodexProvider(Provider):
                 provider=self.name,
                 retryable=True,
             ) from exc
-        return parse_codex_result(result)
+        return parse_codex_result(result, structured=schema is not None)
 
 
-def parse_codex_result(result: ProcessResult) -> ProviderResponse:
+def parse_codex_result(result: ProcessResult, *, structured: bool = False) -> ProviderResponse:
     events: list[dict[str, Any]] = []
     messages: list[str] = []
     session_id: str | None = None
@@ -241,7 +259,8 @@ def parse_codex_result(result: ProcessResult) -> ProviderResponse:
             retryable=True,
         )
     return ProviderResponse(
-        text="\n\n".join(messages),
+        # With --output-schema only the final message is the structured answer.
+        text=messages[-1] if structured else "\n\n".join(messages),
         provider_session_id=session_id,
         usage=usage,
         raw_events=events,

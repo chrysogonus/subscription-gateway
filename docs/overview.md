@@ -110,9 +110,9 @@ flowchart TD
 
 - Out of the box: `codex/gpt-5.6-sol`, `claude-code/opus`, `sonnet`, `haiku`, `fable`, and
   `subscription/auto`. Any other model the CLI accepts works as a passthrough name.
-- **Fallback:** a new request that hits a usage limit, timeout, or outage can move to the other
-  provider. A model the caller named explicitly never falls back when the CLI rejects that model,
-  because no other provider can supply it.
+- **Fallback:** a new `subscription/auto` request that hits a usage limit, timeout, or outage can
+  move to the other provider. A model the caller named explicitly never falls back, so a reply
+  is never attributed to a model that did not write it.
 
 ## 6. Safety boundaries
 

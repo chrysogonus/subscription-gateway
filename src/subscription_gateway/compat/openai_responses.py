@@ -25,6 +25,7 @@ class ResponsesRequest(BaseModel):
     tools: list[dict[str, Any]] | None = None
     previous_response_id: str | None = None
     metadata: dict[str, Any] | None = None
+    text: dict[str, Any] | None = None
     gateway_session_id: str | None = None
 
     def messages(self) -> list[dict[str, Any]]:

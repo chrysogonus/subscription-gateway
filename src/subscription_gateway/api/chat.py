@@ -69,7 +69,7 @@ async def create_chat_completion(
     response.headers["X-Gateway-Model"] = result.executed_model
     return chat_completion_response(
         result.response,
-        model=body.model,
+        model=result.executed_model,
         gateway_session_id=result.gateway_session_id,
     )
 
