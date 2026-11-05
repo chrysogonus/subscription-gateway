@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-05
+
 ### Added
 
 - Structured output. A Chat `response_format` or a Responses `text.format` of type
@@ -210,7 +212,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make check` runs `coverage` rather than `test`, so the 85% floor fails the local gate
   too. `--cov` is not in `addopts`, so a plain `pytest` run reported green while CI failed.
 
-[Unreleased]: https://github.com/chrysogonus/subscription-gateway/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/chrysogonus/subscription-gateway/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/chrysogonus/subscription-gateway/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/chrysogonus/subscription-gateway/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/chrysogonus/subscription-gateway/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/chrysogonus/subscription-gateway/compare/v0.2.0...v0.2.1
