@@ -76,6 +76,9 @@ class CodexProvider(Provider):
             return list(self.models)
         return []
 
+    def has_working_directory(self) -> bool:
+        return self.settings.working_directory.is_dir()
+
     def _working_directory(self, options: dict[str, Any] | None = None) -> Path:
         requested = (options or {}).get("cwd")
         path = Path(requested).expanduser() if requested else self.settings.working_directory

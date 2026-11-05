@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The test suite tolerates anyio's import of pytest's renamed `CallSpec2`, so it can run on
   pytest 9.2. Test configuration only; runtime dependencies are unchanged.
 
+### Fixed
+
+- A missing `providers.<name>.working_directory` returns `provider_unavailable`, as documented,
+  instead of `provider_not_authenticated`, which told users to log in again.
+- A config file that is not valid YAML gives `Configuration error` and exit code 2 instead of a
+  traceback. The message names the line but does not quote it, since it could hold the API key.
+
 ## [0.2.3] - 2026-10-30
 
 ### Added

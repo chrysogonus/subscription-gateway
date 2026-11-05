@@ -232,7 +232,13 @@ def load_config(
         config_path = Path(configured_path).expanduser()
         if not config_path.is_file():
             raise ValueError(f"configuration file does not exist: {config_path}")
-        loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        try:
+            loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            # Not str(exc): its snippet of the bad line can quote server.api_key into logs.
+            mark = getattr(exc, "problem_mark", None)
+            where = f" at line {mark.line + 1}" if mark else ""
+            raise ValueError(f"not valid YAML{where}: {config_path}") from None
         if loaded is not None and not isinstance(loaded, dict):
             raise ValueError("configuration root must be a YAML mapping")
         raw = loaded or {}
