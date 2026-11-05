@@ -46,19 +46,21 @@ Both adapters build argument arrays and run them without a shell. The model name
 against the strict name pattern again just before each run. The rendered conversation is written to
 the CLI's standard input (`-` tells Codex to read it; Claude's `--print` reads it by default), so
 prompt text never appears in the argument list, and its size is not capped by Linux's 128 KiB
-limit on one argument.
+limit on one argument. A [structured output](api.md#structured-output) schema goes to Claude as an
+argument and to Codex as a temporary file, removed when the run ends.
 
 | Run | Command line |
 | --- | --- |
-| Codex chat, new | `codex exec --json --color never --model M --ignore-user-config --sandbox read-only --skip-git-repo-check -` |
-| Codex chat, resume | `codex exec resume --json --model M --ignore-user-config --skip-git-repo-check -c sandbox_mode="read-only" THREAD_ID -` |
-| Claude chat | `claude --print --output-format json --safe-mode --model M [--resume ID] --tools "" --permission-mode plan` |
+| Codex chat, new | `codex exec --json --color never --model M --ignore-user-config --sandbox read-only --skip-git-repo-check [--output-schema FILE] -` |
+| Codex chat, resume | `codex exec resume --json --model M --ignore-user-config --skip-git-repo-check -c sandbox_mode="read-only" [--output-schema FILE] THREAD_ID -` |
+| Claude chat | `claude --print --output-format json --safe-mode --model M [--resume ID] [--json-schema SCHEMA] --tools "" --permission-mode plan` |
 | Claude agent | `claude --print --output-format json --safe-mode --model M [--resume ID] --restricted --strict-mcp-config --tools T --allowedTools T --permission-mode plan\|acceptEdits` |
 | Login checks | `codex login status`, `claude auth status` |
 
 The Codex adapter uses the official documented `codex exec --json` JSONL interface. It reads the
 `thread.started` thread ID, every completed `agent_message` item (joined with blank lines into
-the answer), `turn.completed` usage, and error events. Authentication is checked with
+the answer, or only the last one when a schema was sent), `turn.completed` usage, and error
+events. Authentication is checked with
 `codex login status`, and the CLI reuses its own saved ChatGPT/Codex authentication. See the
 official [Codex non-interactive mode
 documentation](https://learn.chatgpt.com/docs/non-interactive-mode).
@@ -68,7 +70,8 @@ read-only sandbox. The sandbox blocks writes but not reads, which is why Codex i
 filesystem agent.
 
 The Claude adapter uses `claude --print --output-format json`, checks `claude auth status`, keeps
-stdout and stderr separate, and resumes returned session IDs. Chat runs get no tools at all. The
+stdout and stderr separate, and resumes returned session IDs. With a schema, the answer comes from
+the output's `structured_output` field. Chat runs get no tools at all. The
 adapter is isolated behind `Provider`, so a future Claude Agent SDK implementation can replace it
 without changing routing or HTTP code.
 

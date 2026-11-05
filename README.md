@@ -148,8 +148,8 @@ Any other model the CLI accepts also works without configuration, for example
 | --- | --- |
 | `GET /health`, `GET /ready` | Liveness, and whether any provider is ready |
 | `GET /v1/models` | Models from the ready providers |
-| `POST /v1/chat/completions` | OpenAI Chat Completions (text only), with streaming |
-| `POST /v1/responses` | A text subset of the OpenAI Responses API |
+| `POST /v1/chat/completions` | OpenAI Chat Completions (text only), with streaming and JSON Schema structured output |
+| `POST /v1/responses` | A text subset of the OpenAI Responses API, with the same streaming and structured output |
 | `POST /v1/agents/run` | A Claude Code agent run inside an allowed directory, read-only or with edits |
 
 Full request and response details, error codes, and examples are in the [API guide](docs/api.md).
@@ -241,7 +241,7 @@ does not offer that model. A model you name explicitly never falls back to anoth
 | --- | --- |
 | [Overview](docs/overview.md) | A five-minute visual tour, for explaining the project to someone else |
 | [Configuration](docs/configuration.md) | `config.yaml` reference, environment variables, CLI commands, local API key |
-| [API](docs/api.md) | Endpoints, request fields, streaming, sessions, the agent endpoint, error codes |
+| [API](docs/api.md) | Endpoints, request fields, streaming, structured output, sessions, the agent endpoint, error codes |
 | [Models and routing](docs/models-and-routing.md) | Catalogued vs. passthrough models, routing, fallback, queuing |
 | [Docker](docs/docker.md) | The image, Compose stack, variables, credential mounts, optional OpenWebUI |
 | [Architecture](docs/architecture.md) | Package layout, provider command lines, development, `make` targets |

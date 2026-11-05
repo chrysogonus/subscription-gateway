@@ -99,7 +99,7 @@ logging:
 
 | Key | Meaning |
 | --- | --- |
-| `enabled` | `false` hides the provider and makes requests to it fail with `provider_unavailable`. |
+| `enabled` | `false` hides the provider from `/v1/models`, unless `advertise_unavailable` is `true`, and makes requests to it fail with `provider_unavailable`, or `provider_not_authenticated` if the CLI is also signed out. |
 | `command` | The CLI to run, looked up on `PATH` once at startup. |
 | `max_concurrent` | How many CLI processes may run at once; extra requests wait in a queue. |
 | `timeout_seconds` | Limit for one CLI run. A timeout returns `provider_timeout` (504). Login checks use `min(10, timeout_seconds)`. |
@@ -183,9 +183,9 @@ Boolean variables accept `true`/`false`, `1`/`0`, `yes`/`no`, and `on`/`off`. Ev
 including models, routing, agent directories, concurrency, and timeouts, is set only through
 `config.yaml`.
 
-The gateway does not load `.env` files itself. [`.env.example`](../.env.example) lists the native
-variables; `source` it or export them in your shell. The Docker stack reads its own variables;
-see [Docker variables](#docker-variables).
+The gateway does not load `.env` files itself. [`.env.example`](../.env.example) lists the most
+common native variables; `source` it or export them in your shell. The Docker stack reads its own
+variables; see [Docker variables](#docker-variables).
 
 ## CLI reference
 

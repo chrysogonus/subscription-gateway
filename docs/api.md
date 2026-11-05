@@ -132,7 +132,8 @@ runtime decides sampling, length, and stopping.
 }
 ```
 
-`model` echoes the requested name. `finish_reason` is always `stop`. The headers
+`model` names the model that ran, so after `subscription/auto` it is the chosen provider's model.
+`finish_reason` is always `stop`. The headers
 `X-Gateway-Session`, `X-Gateway-Provider`, and `X-Gateway-Model` are described under
 [Sessions](#sessions).
 
@@ -158,8 +159,8 @@ one content chunk once the run finishes.
 | Responses | `response.created` → one `response.output_text.delta` → `response.completed` (with `output_text`) → `data: [DONE]` |
 
 Streams carry no usage block. Streaming responses return only the `X-Gateway-Session` header,
-plus `Cache-Control: no-cache` and `X-Accel-Buffering: no`, because the provider is chosen after
-the headers are sent.
+plus `Cache-Control: no-cache` and `X-Accel-Buffering: no`, and their `model` field repeats the
+requested name, because the provider is chosen after the headers are sent.
 
 Request, routing, and session errors still return a normal JSON error status. A provider
 failure after the stream has started arrives **inside** the HTTP 200 stream as
@@ -304,7 +305,7 @@ Non-streaming responses also carry:
 | Header | Value |
 | --- | --- |
 | `X-Gateway-Provider` | The provider that ran: `codex` or `claude`. Check it when `subscription/auto` may have switched providers. |
-| `X-Gateway-Model` | The alias of the model that ran. After `subscription/auto`, this is the chosen provider's model, such as `claude-code/opus`, and it stays the same for the rest of the session. The body's `model` field names the same model. |
+| `X-Gateway-Model` | The alias of the model that ran. After `subscription/auto`, this is the chosen provider's model, such as `claude-code/opus`, and it stays the same for the rest of the session. In chat and Responses, the body's `model` field names the same model; in agent runs, it repeats the requested name. |
 
 ### Role handling
 
@@ -403,6 +404,7 @@ provider when [fallback](models-and-routing.md#routing-fallback-and-queuing) is 
 | --- | --- | --- | --- | --- |
 | `request_validation_error` | `invalid_request` | 400 | — | The body does not match the schema, or its text is not valid Unicode (an unpaired surrogate) |
 | `unsupported_feature` | `invalid_request` | 400 | — | `tools`, `tool_choice`, or `previous_response_id` |
+| `invalid_response_format` | `invalid_request` | 400 | — | A `json_schema` format without a `schema` object |
 | `conflicting_session_ids` | `invalid_request` | 400 | — | Header and body session IDs differ |
 | `session_model_mismatch` | `invalid_request` | 400 | — | Continuing a session with a different model |
 | `session_context_mismatch` | `invalid_request` | 400 | — | Continuing a session with a different API type, `cwd`, or permissions |
@@ -411,7 +413,7 @@ provider when [fallback](models-and-routing.md#routing-fallback-and-queuing) is 
 | `invalid_api_key` | `authentication_error` | 401 | — | Missing or wrong gateway key |
 | `agent_permission_error` | `agent_permission_error` | 403 | — | No gateway key configured, or `cwd` rejected |
 | `model_not_available` | `model_not_available` | 404 | `subscription/auto` only | Unknown name, or the CLI or plan rejects the model |
-| `session_not_found` | `session_not_found` | 404 | — | Unknown or deleted session ID |
+| `session_not_found` | `session_not_found` | 404 | — | Unknown, deleted, or expired session ID |
 | `provider_usage_limit` | `provider_usage_limit` | 429 | yes | The plan's usage or rate limit was hit |
 | `provider_execution_failed` | `provider_protocol_error` | 502 | yes | The CLI failed for another reason |
 | `provider_malformed_output` | `provider_protocol_error` | 502 | yes | The CLI printed output the gateway cannot parse |
