@@ -76,6 +76,9 @@ filterwarnings = [
   # starlette.testclient still imports httpx and warns about it; the fix is
   # upstream (httpx2) and not ours to make.
   "ignore:Using `httpx` with `starlette.testclient` is deprecated:UserWarning",
+  # anyio's pytest plugin imports a name pytest renamed. anyio 4.15+ fixes that
+  # but deprecates an alias starlette 1.6's testclient uses: upgrade both together.
+  "ignore:_pytest.python.CallSpec2 has been renamed:pytest.PytestRemovedIn10Warning",
 ]
 
 [tool.ruff]

@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   named its model could otherwise receive another vendor's answer under the requested name.
 - The response body's `model` field names the model that ran, matching `X-Gateway-Model`,
   instead of echoing the requested name such as `subscription/auto`.
+- The test suite tolerates anyio's import of pytest's renamed `CallSpec2`, so it can run on
+  pytest 9.2. Test configuration only; runtime dependencies are unchanged.
 
 ## [0.2.3] - 2026-10-30
 
