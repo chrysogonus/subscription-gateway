@@ -15,11 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The documentation matches the code again: the response `model` field, structured output, the
+  provider command lines, fallback on rejected models, error codes, and the release process.
 - A model the caller names, such as `claude-code/haiku`, no longer falls back to another
   provider on a retryable failure. Only `subscription/auto` falls back. An eval or judge that
   named its model could otherwise receive another vendor's answer under the requested name.
-- The response body's `model` field names the model that ran, matching `X-Gateway-Model`,
-  instead of echoing the requested name such as `subscription/auto`.
+- In non-streaming chat and Responses, the response body's `model` field names the model that
+  ran, matching `X-Gateway-Model`, instead of echoing the requested name such as
+  `subscription/auto`. Streams and agent runs still repeat the requested name.
 - The test suite tolerates anyio's import of pytest's renamed `CallSpec2`, so it can run on
   pytest 9.2. Test configuration only; runtime dependencies are unchanged.
 

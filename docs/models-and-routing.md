@@ -109,7 +109,8 @@ Fallback rules:
 - **Retryable** failures can fall back: `provider_unavailable`, `provider_temporary_error`,
   `provider_not_authenticated` (when the login check finds it before the run),
   `provider_usage_limit`, `provider_timeout`, `provider_execution_failed`,
-  `provider_malformed_output`, and `provider_missing_output`. See the
+  `provider_malformed_output`, `provider_missing_output`, and `model_not_available` (when the CLI
+  rejects the model a `subscription/auto` route chose). See the
   [error reference](api.md#errors).
 - Request errors (validation, sessions, unsupported features) never fall back.
 - A provider missing from `routing.order` is never used by `subscription/auto`. It can still be

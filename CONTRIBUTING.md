@@ -66,6 +66,11 @@ against a live CLI, it needs a fake at the `Provider` boundary instead.
 Commit messages follow a `type: summary` form (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`,
 `chore:`, `ci:`). Nothing enforces it; it keeps the changelog easy to assemble.
 
+The `main` ruleset requires a pull request, the CI checks, and one approving review, and it allows
+only merge commits. GitHub does not let authors approve their own pull requests, so while the
+repository has a single collaborator, the maintainer's own pull requests merge with the admin
+bypass (`gh pr merge --admin --merge`). Dependabot's can be approved normally.
+
 ## Reporting bugs
 
 Open an issue using the bug report template. Include the output of `subscription-gateway doctor`
@@ -80,19 +85,24 @@ Maintainer steps:
 
 For the first public release, change repository visibility only after enabling Dependabot
 vulnerability alerts, secret scanning and push protection, Discussions (used by the repository's
-community contact), and a `main` branch ruleset that requires the CI checks and blocks force
-pushes. Recheck those settings after the visibility change because plan-dependent controls may
-not be available while the repository is private.
+community contact), and a `main` branch ruleset that requires pull requests, one approving review,
+and the CI checks, allows only merge commits, and blocks force pushes and branch deletion. Recheck
+those settings after the visibility change because plan-dependent controls may not be available
+while the repository is private.
 
-1. Bump `version` in `pyproject.toml`. It is the single source of truth; the package and the
-   FastAPI app read it from installed metadata.
+1. On a `release/X.Y.Z` branch, bump `version` in `pyproject.toml`. It is the single source of
+   truth; the package and the FastAPI app read it from installed metadata. Run `make lock` so
+   `uv.lock` records the new version; CI's `--locked` install fails without it.
 2. Move the `## [Unreleased]` entries into a new `## [X.Y.Z] - YYYY-MM-DD` section in
    `CHANGELOG.md` and update the link definitions at the bottom.
-3. Commit, then tag and push:
+3. Open a pull request titled `release: X.Y.Z` and merge it.
+4. Tag the merge commit and push the tag:
 
    ```bash
+   git switch main
+   git pull --ff-only
    git tag -a vX.Y.Z -m "vX.Y.Z"
-   git push origin main --follow-tags
+   git push origin vX.Y.Z
    ```
 
 The `release` workflow re-runs the CI checks, fails if the tag does not match the
