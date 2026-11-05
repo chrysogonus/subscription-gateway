@@ -212,6 +212,22 @@ def test_a_missing_config_file_is_a_configuration_error(
     assert "Configuration error" in capsys.readouterr().err
 
 
+def test_malformed_yaml_is_a_configuration_error_naming_the_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("server:\n  api_key: sup3r-secret: oops\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as caught:
+        cli.main(["status", "--config", str(config_path)])
+
+    assert caught.value.code == 2
+    err = capsys.readouterr().err
+    assert "Configuration error" in err
+    assert "line 2" in err
+    assert "sup3r-secret" not in err
+
+
 def test_an_override_that_violates_the_bind_policy_is_a_configuration_error(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

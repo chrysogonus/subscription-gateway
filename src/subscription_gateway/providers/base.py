@@ -85,6 +85,11 @@ class Provider(ABC):
     @abstractmethod
     async def list_models(self) -> list[str]: ...
 
+    def has_working_directory(self) -> bool:
+        """False when the CLI cannot start, which also makes its login check fail."""
+
+        return True
+
     async def create_session(self, model: str) -> str:
         """Return a lazy marker; real runtimes create their session on first send."""
 

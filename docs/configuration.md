@@ -18,8 +18,8 @@ Settings are applied in this order, and later sources win:
 3. the [environment overrides](#environment-overrides);
 4. `serve --host` / `--port`.
 
-A config path that does not exist, a YAML root that is not a mapping, or any invalid value stops
-every command with `Configuration error: …` and exit code 2.
+A config path that does not exist, a file that is not valid YAML, a YAML root that is not a
+mapping, or any invalid value stops every command with `Configuration error: …` and exit code 2.
 
 ## config.yaml reference
 
@@ -104,7 +104,7 @@ logging:
 | `max_concurrent` | How many CLI processes may run at once; extra requests wait in a queue. |
 | `timeout_seconds` | Limit for one CLI run. A timeout returns `provider_timeout` (504). Login checks use `min(10, timeout_seconds)`. |
 | `advertise_unavailable` | List this provider's models in `/v1/models` even when it is not ready. Discovery only; requests still fail with a normal error. |
-| `working_directory` | Directory the CLI runs in for chat requests and login checks (`~` is expanded). If it does not exist, requests fail with `provider_unavailable`. Codex chat runs here under `--sandbox read-only`. |
+| `working_directory` | Directory the CLI runs in for chat requests and login checks (`~` is expanded). If it does not exist, requests fail with `provider_unavailable`, and `/ready`, `status`, and `doctor` show the provider as not authenticated because its login check cannot run. Codex chat runs here under `--sandbox read-only`. |
 | `models` | The **catalogued** models: the only names `/v1/models` can advertise. |
 
 Each `models` entry maps a public alias to:

@@ -360,6 +360,11 @@ class GatewayEngine:
     async def _require_available(route: Route) -> None:
         if await route.provider.is_available():
             return
-        if route.provider.is_installed() and not await route.provider.is_authenticated():
-            raise provider_not_authenticated(route.provider.name)
+        provider = route.provider
+        if (
+            provider.is_installed()
+            and provider.has_working_directory()
+            and not await provider.is_authenticated()
+        ):
+            raise provider_not_authenticated(provider.name)
         raise provider_unavailable(route.provider.name)

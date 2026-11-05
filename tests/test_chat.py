@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from pathlib import Path
 
+import pytest
 from conftest import FakeProvider
 from fastapi.testclient import TestClient
 
 from subscription_gateway.compat.openai_chat import messages_to_prompt
-from subscription_gateway.config import GatewayConfig
+from subscription_gateway.config import ClaudeSettings, CodexSettings, GatewayConfig
 from subscription_gateway.errors import ProviderError
 from subscription_gateway.main import create_app
-from subscription_gateway.providers.base import ProviderEvent
+from subscription_gateway.providers.base import Provider, ProviderEvent
+from subscription_gateway.providers.claude import ClaudeProvider
+from subscription_gateway.providers.codex import CodexProvider
 
 
 def test_chat_completion_and_session(client: TestClient, fake_codex: FakeProvider) -> None:
@@ -294,6 +298,41 @@ def test_unauthenticated_provider_is_distinguished(gateway_config: GatewayConfig
         )
     assert response.status_code == 503
     assert response.json()["error"]["type"] == "provider_not_authenticated"
+
+
+@pytest.mark.parametrize(
+    ("provider_name", "model"),
+    [("codex", "codex/gpt-5.6-sol"), ("claude", "claude-code/opus")],
+)
+@pytest.mark.parametrize(
+    ("directory", "code"),
+    [
+        ("missing", "provider_unavailable"),
+        # /bin/echo never reports a login, so an existing directory means signed out.
+        (".", "provider_not_authenticated"),
+    ],
+)
+def test_a_failed_login_check_is_reported_by_its_cause(
+    gateway_config: GatewayConfig,
+    tmp_path: Path,
+    provider_name: str,
+    model: str,
+    directory: str,
+    code: str,
+) -> None:
+    cwd = tmp_path / directory
+    provider: Provider = (
+        CodexProvider(CodexSettings(command="/bin/echo", working_directory=cwd))
+        if provider_name == "codex"
+        else ClaudeProvider(ClaudeSettings(command="/bin/echo", working_directory=cwd))
+    )
+    with TestClient(create_app(gateway_config, providers={provider_name: provider})) as test_client:
+        response = test_client.post(
+            "/v1/chat/completions",
+            json={"model": model, "messages": [{"role": "user", "content": "x"}]},
+        )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == code
 
 
 def test_tools_are_rejected(client: TestClient) -> None:

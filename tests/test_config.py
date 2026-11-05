@@ -138,3 +138,22 @@ def test_unknown_model_keys_are_rejected() -> None:
         GatewayConfig.model_validate(
             _provider_config({"codex/x": {"provider_model": "x", "temperature": 0.5}})
         )
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param("server:\n  api_key: sup3r-secret: oops\n", id="syntax-error"),
+        pytest.param("server:\n  api_key: sup3r-secret\x01\n", id="unreadable-character"),
+    ],
+)
+def test_malformed_yaml_is_a_value_error_that_does_not_quote_the_file(
+    tmp_path: Path, content: str
+) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"config\.yaml") as caught:
+        load_config(path, environ={})
+
+    assert "sup3r-secret" not in str(caught.value)
