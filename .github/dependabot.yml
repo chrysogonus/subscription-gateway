@@ -27,3 +27,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # The image stays on a Python version that CI tests. Move it by hand along with the matrix.
+      - dependency-name: python
