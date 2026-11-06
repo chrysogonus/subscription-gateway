@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Dependabot no longer proposes updates to the `python` Docker image, which could move the image
+  to a version CI does not test. Other Docker image updates are unaffected.
+
 ## [0.3.0] - 2026-11-05
 
 ### Added
